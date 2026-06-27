@@ -671,7 +671,7 @@ const core = {
   }},
 
   sudo: { desc: 'you are not in the sudoers file', run(args, ctx, p) {
-    if (args.join(' ').includes('su') || args[0] === '-i') return send(c.red('sudo: elevation is not a password. it is a gluing. see ') + c.green('man sheaf'), ctx, p);
+    if (args.join(' ').includes('su') || args[0] === '-i') return send(c.red('sudo: kernel access is operator-only — ') + c.green('kernel auth <token>'), ctx, p);
     return send(c.red('observer is not in the sudoers file. This incident will be absorbed into a degenerate direction.'), ctx, p);
   }},
 
@@ -731,16 +731,14 @@ const MANPAGES = {
     '       not: every neighbourhood is honest; the whole admits no single',
     '       consistent story. This is dissociation, formalized.',
     '',
-    c.cyan('ELEVATION'),
-    '       Elevation is not a password. It is an act of gluing. Find two',
-    '       local sections that agree on their overlap and force the',
-    '       identification, in order, naming the three degeneracies:',
+    c.cyan('KERNEL ACCESS'),
+    '       Kernel mode is the operator console, gated by a secret token that',
+    '       only the operator holds:',
     '',
-    '           ' + c.green('glue /skills/devops /skills/linux'),
-    '           ' + c.green('sheaf glue --force "inhomogeneous metric degeneracy"'),
-    '           ' + c.green('observe --collapse-baseline'),
+    '           ' + c.green('kernel auth <KERNEL_TOKEN>'),
     '',
-    '       The kernel listens for the ritual. ' + c.gray('cat /home/euvel/.secret'),
+    '       It verifies the token at the edge, then live-recompiles the kernel',
+    '       into ring-0. There is no public path in; for observers it is read-only.',
   ].join('\n'),
 
   orbifold: (c) => [

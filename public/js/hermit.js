@@ -11,11 +11,8 @@ export function hermitCommands(core, send) {
       desc: 'measure an observable of the orbifold', usage: 'observe [--collapse-baseline]',
       run(args, ctx, piped) {
         if (args.includes('--collapse-baseline')) {
-          ctx.state.ritual = ctx.state.ritual || {};
-          ctx.state.ritual.collapse = true;
           ctx.bus.emit('orbifold:pulse', { kind: 'collapse' });
-          tryElevate(ctx);
-          return send(c.amber('baseline collapse requested. the projection trembles but holds.\nif the gluing preceded this, the kernel will wake.'), ctx, piped);
+          return send(c.amber('baseline collapse requested. the projection trembles but holds — bounded output, by design.'), ctx, piped);
         }
         const g = (0).toFixed(6);
         const i = (Math.random()).toFixed(6);
@@ -122,16 +119,12 @@ export function hermitCommands(core, send) {
       desc: 'attempt to glue two local sections', usage: 'glue <pathA> <pathB>',
       run(args, ctx, piped) {
         if (args.length < 2) return send(c.gray('usage: glue <pathA> <pathB>   (e.g. glue /skills/devops /skills/linux)'), ctx, piped);
-        ctx.state.ritual = ctx.state.ritual || {};
-        ctx.state.ritual.glued = [args[0], args[1]];
         ctx.bus.emit('orbifold:pulse', { kind: 'glue' });
-        tryElevate(ctx);
         return send([
           c.amber(`attempting to glue ${args[0]} ⊔ ${args[1]} ...`),
           c.gray('  checking agreement on the overlap ............ consistent'),
           c.green('  local identification forced.'),
-          c.gray('  but the global section still does not exist. you have only')
-          + c.gray(' begun the ritual. continue: ') + c.green('sheaf glue --force "inhomogeneous metric degeneracy"'),
+          c.gray('  but the sections still admit no global section. that is the point.'),
         ].join('\n'), ctx, piped);
       },
     },
@@ -143,15 +136,10 @@ export function hermitCommands(core, send) {
         const phrase = args.slice(1).join(' ').replace(/--force/g, '').replace(/"/g, '').trim().toLowerCase();
         ctx.state.ritual = ctx.state.ritual || {};
         if (phrase.includes('inhomogeneous metric degeneracy')) {
-          ctx.state.ritual.phrase = true;
           ctx.bus.emit('orbifold:pulse', { kind: 'sheaf' });
-          tryElevate(ctx);
-          return send([
-            c.amber('the kernel hears the first degeneracy named correctly.'),
-            c.gray('two of three steps complete. finish with: ') + c.green('observe --collapse-baseline'),
-          ].join('\n'), ctx, piped);
+          return send(c.amber('the gluing morphism is applied; the presheaf still fails the sheaf axiom globally.'), ctx, piped);
         }
-        return send(c.red('the kernel does not recognize that phrase. name the degeneracies exactly as the README does.'), ctx, piped);
+        return send(c.gray('sheaf glue --force "<a degeneracy>"  — try "inhomogeneous metric degeneracy".'), ctx, piped);
       },
     },
 
@@ -190,20 +178,7 @@ export function hermitCommands(core, send) {
   };
 }
 
-function tryElevate(ctx) {
-  const r = ctx.state.ritual || {};
-  if (r.glued && r.phrase && r.collapse && !ctx.state.elevated) {
-    ctx.state.elevated = true;
-    ctx.bus.emit('elevate', { on: true });
-    setTimeout(() => {
-      ctx.shell.out('');
-      ctx.shell.out(c.red('████ THE LOCAL SECTIONS HAVE GLUED ████'));
-      ctx.shell.out(c.amber('the global section that should not exist… momentarily does.'));
-      ctx.shell.out(c.green('elevation granted. you are now in KERNEL MODE.'));
-      ctx.shell.out(c.gray('verbs unlocked: ') + c.green('kernel edit') + c.gray(' · ') + c.green('kernel add') + c.gray(' · ') + c.green('aiwass retrain') + c.gray(' · ') + c.green('kernel ls'));
-      ctx.shell.out(c.gray('the prompt has changed. so have you.'));
-    }, 200);
-  }
-}
+// kernel access is now a single, verified step: `kernel auth <KERNEL_TOKEN>`.
+// glue/sheaf/observe remain as flavor verbs that only perturb the 3D field.
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

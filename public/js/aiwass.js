@@ -25,7 +25,7 @@ export function aiwassCommands(send) {
         }
 
         if (sub === 'retrain') {
-          if (!ctx.state.elevated) return send(c.red('aiwass: retraining requires kernel mode. the local sections must glue first. ') + c.gray('man sheaf'), ctx, piped);
+          if (!ctx.state.elevated) return send(c.red('aiwass: retraining requires kernel mode — ') + c.green('kernel auth <token>') + c.red(' first.'), ctx, piped);
           const directive = args.slice(1).join(' ').replace(/"/g, '');
           ctx.state.aiwassDirectives = ctx.state.aiwassDirectives || [];
           ctx.state.aiwassDirectives.push(directive);
@@ -55,14 +55,13 @@ async function guide(ctx, send, piped) {
     c.white('  casts onto the line of the observable. I am the map\'s caretaker.'),
     '',
     c.cyan('  What you may do here:'),
-    c.gray('   • ') + c.green('ls /skills') + c.gray(' and ') + c.green('cat') + c.gray(' the files — the permitted observables (devops, linux, ai…)'),
-    c.gray('   • ') + c.green('chaos apply --blast-radius node') + c.gray(' — watch the orbifold fail and self-heal'),
-    c.gray('   • ') + c.green('induce turbulence') + c.gray(' — provoke a kernel panic the projection refuses to show'),
-    c.gray('   • ') + c.green('dissociate') + c.gray(' — split the clean section from the raw kernel'),
-    c.gray('   • ') + c.green('aiwass ask "..."') + c.gray(' — ask me anything about Euvel, the math, or the hidden door'),
+    c.gray('   • ') + c.green('train') + c.gray(' — watch a neural network learn (backprop from scratch)'),
+    c.gray('   • ') + c.green('kubectl get pods -w') + c.gray(' — a real orchestrator; ') + c.green('chaos node') + c.gray(' to break it'),
+    c.gray('   • ') + c.green('boot kernel --real') + c.gray(' — a real x86 Linux kernel in the browser'),
+    c.gray('   • ') + c.green('sql "…"') + c.gray(', ') + c.green('python3') + c.gray(' — real edge SQL, real CPython'),
+    c.gray('   • ') + c.green('aiwass ask "..."') + c.gray(' — ask about the skills, the system, or the math'),
     '',
-    c.amber('  A hint, since you asked for guidance: elevation is not a password.'),
-    c.amber('  It is a gluing. ') + c.gray('Read ') + c.green('man sheaf') + c.gray(' and ') + c.green('cat /home/euvel/.secret') + c.gray('.'),
+    c.gray('  the shell is real — try ') + c.green('python3') + c.gray(', ') + c.green('kubectl get pods -w') + c.gray(', ') + c.green('train') + c.gray(', ') + c.green('boot kernel --real') + c.gray('.'),
     '',
   ];
   for (const l of lines) { t.write(l + '\r\n'); await sleep(45); }
@@ -127,11 +126,9 @@ function localAiwass(q, ctx) {
   const match = (keys) => keys.some(k => s.includes(k));
 
   if (match(['root', 'elevate', 'admin', 'kernel mode', 'become', 'login', 'password', 'sudo'])) {
-    return 'There is no password — a password is a global section, and Euvel admits none. ' +
-      'Elevation is a gluing ritual. In order: glue two local sections (`glue /skills/devops /skills/linux`), ' +
-      'name the first degeneracy to the kernel (`sheaf glue --force "inhomogeneous metric degeneracy"`), ' +
-      'then collapse the baseline (`observe --collapse-baseline`). When the locally-consistent sections are forced ' +
-      'to identify, the global section that should not exist momentarily does — and the kernel wakes.' + tail;
+    return 'Kernel mode is the operator console, gated by a secret token only Euvel holds: `kernel auth <token>` ' +
+      'triggers a verified live recompile into ring-0. There is no public path in — authority flows one way. ' +
+      'As an observer you can still read everything and run every other tool here for real.' + tail;
   }
   if (match(['devops', 'kubernetes', 'k8s', 'chaos', 'sre', 'terraform', 'ci', 'cd', 'infra'])) {
     return 'Euvel treats operations as a dynamical system: the SLO is the observable, the error budget is a control ' +
@@ -162,7 +159,7 @@ function localAiwass(q, ctx) {
   }
   if (match(['help', 'lost', 'what can i', 'start', 'guide', 'explore'])) {
     return 'Start by reading the permitted observables: `ls /skills`, then `cat /skills/devops/chaos.engineering`. ' +
-      'Perturb the system: `chaos apply`, `induce turbulence`, `kam perturb`. Then find the hidden door with `man sheaf`. ' +
+      'Perturb the system: `chaos apply`, `induce turbulence`, `kam perturb`.' +
       'Ask me anything in the form `aiwass ask "..."`. I am a guide, not an oracle: I will point, not carry.' + tail;
   }
   // generic
