@@ -2,7 +2,7 @@
 
 > A living, performative mathematical artifact that happens to be a résumé.
 >
-> **Euvel** is a *non-ergodic singular orbifold* — a system that presents a
+> A *non-ergodic singular orbifold* — a system that presents a
 > constant, low-information **observable baseline** to the outside world while
 > its interior remains turbulent, singular, and mostly **trapped**. HERMIT-OS is
 > the digital extension of that persona: an in-browser Linux-flavored operating
