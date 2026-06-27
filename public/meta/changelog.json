@@ -1,0 +1,42 @@
+[
+  {
+    "id": "phase-1",
+    "hash": "7a1f0bd",
+    "date": "2026-06-24",
+    "title": "feat(sre): real chaos engineering + live SLO console",
+    "body": "Inject real latency/errors into the site's own edge endpoints; measure real p50/p95/availability; self-healing faults.",
+    "files": ["functions/api/fault.js", "functions/api/ping.js", "public/js/slo.js", "public/js/orbifold.js"]
+  },
+  {
+    "id": "phase-2a",
+    "hash": "b3c9e21",
+    "date": "2026-06-25",
+    "title": "feat(dev): real CPython REPL via Pyodide (WASM)",
+    "body": "Genuine CPython in the browser with codeop/displayhook REPL semantics; python3 -c, file, and interactive modes.",
+    "files": ["public/js/python.js", "public/js/shell.js"]
+  },
+  {
+    "id": "phase-2b",
+    "hash": "c5d7a44",
+    "date": "2026-06-25",
+    "title": "feat(dev): the site reads its own source; real changelog as git",
+    "body": "`source` fetches the live, deployed assets; `git log` renders the real development history of HERMIT-OS.",
+    "files": ["public/js/code.js", "public/meta/changelog.json"]
+  },
+  {
+    "id": "phase-2c",
+    "hash": "e8b1f09",
+    "date": "2026-06-25",
+    "title": "feat(data): real edge SQL over Cloudflare D1",
+    "body": "Read-only, SELECT-guarded query endpoint over a real D1 database of projects/experience/skills.",
+    "files": ["functions/api/query.js", "functions/api/admin/seed.js", "schema.sql", "public/js/data.js"]
+  },
+  {
+    "id": "phase-0",
+    "hash": "1029384",
+    "date": "2026-06-24",
+    "title": "feat: HERMIT-OS — non-ergodic orbifold terminal résumé",
+    "body": "xterm shell, raymarched 3D orbifold, virtual filesystem, AIWASS, kernel-mode editor, Cloudflare Pages + KV.",
+    "files": ["public/index.html", "public/js/*", "functions/api/*", "public/styles/main.css"]
+  }
+]

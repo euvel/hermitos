@@ -1,0 +1,10 @@
+# HERMIT-OS edge headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Powered-By: HERMIT-OS/1.0 (non-ergodic singular orbifold)
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+/api/*
+  Cache-Control: no-store

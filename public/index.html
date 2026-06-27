@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="hermit — an interactive systems terminal: real Linux (v86), real Python (WASM), real edge SQL, chaos engineering, and a live neural-net training lab, in the browser." />
+  <meta name="theme-color" content="#04060a" />
+  <meta name="color-scheme" content="dark" />
+  <title>hermit — interactive systems terminal</title>
+
+  <!-- xterm.js (terminal) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+
+  <!-- HERMIT-OS styles -->
+  <link rel="stylesheet" href="/styles/main.css" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%97%89%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <!-- ── Layer 0: the orbifold (3D internal system) ───────────────────── -->
+  <canvas id="orbifold" aria-hidden="true"></canvas>
+
+  <!-- ── Layer 1: CRT / scanline / vignette overlays ──────────────────── -->
+  <div id="crt-overlay" aria-hidden="true">
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="flicker"></div>
+    <div class="glow"></div>
+  </div>
+
+  <!-- ── Boot splash ──────────────────────────────────────────────────── -->
+  <div id="boot">
+    <pre id="boot-log" aria-live="polite"></pre>
+  </div>
+
+  <!-- ── Layer 2: the projection (observer terminal) ──────────────────── -->
+  <main id="shell" hidden>
+    <header id="topbar">
+      <span class="led" id="led-power" title="baseline observable"></span>
+      <span class="hostid">hermit</span>
+      <span class="sep">::</span>
+      <span class="mono" id="status-metric">metric: degenerate</span>
+      <span class="sep">::</span>
+      <span class="mono" id="status-info">I(obs)=const</span>
+      <span class="grow"></span>
+      <span class="mono dim" id="status-load">load 0.00 0.00 0.00</span>
+      <button id="btn-dissociate" class="chip" title="dissociate (split view)">dissociate</button>
+    </header>
+
+    <div id="split">
+      <section id="term-pane">
+        <div id="terminal"></div>
+      </section>
+      <aside id="kernel-pane" hidden>
+        <div class="kernel-head">/proc/euvel/internal — RAW KERNEL STREAM</div>
+        <pre id="kernel-stream"></pre>
+      </aside>
+    </div>
+
+    <footer id="hint">
+      <span class="dim">external observer attached.</span>
+      try <code>help</code> · <code>aiwass guide</code> · <code>man hermit</code>
+      <span class="dim">· right-drag to orbit the orbifold</span>
+      <span class="grow"></span>
+      <span class="dim" id="fps">--</span>
+    </footer>
+  </main>
+
+  <!-- xterm.js + addons -->
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+
+  <!-- three.js (module) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+
+  <!-- HERMIT-OS kernel (ES modules) -->
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

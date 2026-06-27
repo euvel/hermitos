@@ -1,0 +1,24 @@
+{
+  "name": "hermit-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HERMIT-OS — a living performative mathematical artifact and resume kernel for Euvel, the non-ergodic singular orbifold.",
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler pages dev public --kv HERMIT_KV --d1 HERMIT_DB --compatibility-date=2024-09-01",
+    "preview": "npx wrangler pages dev public"
+  },
+  "keywords": [
+    "resume",
+    "cloudflare-pages",
+    "xterm",
+    "three.js",
+    "orbifold",
+    "terminal"
+  ],
+  "author": "Euvel",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "_comment": "Copy this file to manifest.json (same folder) and point it at YOUR self-hosted image. Then `boot kernel --real` will boot it. Only the keys you use are needed; everything else falls back to v86 defaults from the CDN. See README.md in this folder.",
+
+  "_example_A_iso": "Smallest setup: a bootable ISO (e.g. TinyCore ~16MB). Put the .iso in this /vm/ folder.",
+  "cdrom": "/vm/linux.iso",
+
+  "_example_B_kernel_initrd": "A Buildroot bzImage + initrd (very small).",
+  "_bzimage": "/vm/bzImage",
+  "_initrd": "/vm/initrd",
+  "_cmdline": "console=ttyS0 tty0",
+
+  "_example_C_saved_state": "Fastest boot: a v86 saved state (.bin.zst) that restores an already-booted Linux instantly.",
+  "_initial_state": "/vm/state.bin.zst",
+
+  "memory_size": 134217728,
+  "vga_memory_size": 8388608,
+
+  "_optional_overrides": "Pin the v86 runtime/BIOS to a self-hosted copy instead of the CDN if you prefer.",
+  "_wasm_path": "/vm/v86.wasm",
+  "_libv86": "/vm/libv86.js",
+  "_bios": "/vm/seabios.bin",
+  "_vga_bios": "/vm/vgabios.bin"
+}

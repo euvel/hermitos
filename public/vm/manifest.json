@@ -1,0 +1,10 @@
+{
+  "_comment": "Active config for `boot kernel --real`. Self-hosted v86 runtime + a small Buildroot Linux ISO (linux4.iso, ~7.7MB) from copy.sh/v86. Boots to a real VGA console. Swap in your own image anytime.",
+  "libv86": "/vm/libv86.js",
+  "wasm_path": "/vm/v86.wasm",
+  "bios": "/vm/seabios.bin",
+  "vga_bios": "/vm/vgabios.bin",
+  "cdrom": "/vm/linux4.iso",
+  "memory_size": 134217728,
+  "vga_memory_size": 8388608
+}

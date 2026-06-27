@@ -1,0 +1,14 @@
+# Copy to `.dev.vars` for local `wrangler pages dev` (do NOT commit .dev.vars).
+# In production these are set in the Cloudflare dashboard → Settings → Variables.
+
+# Live AIWASS via Groq (optional — falls back to local persona if absent)
+GROQ_API_KEY=
+
+# Optional model override
+# GROQ_MODEL=llama-3.3-70b-versatile
+
+# Required to PERSIST kernel-mode edits / seed D1 (any strong random string)
+KERNEL_TOKEN=
+
+# Optional Workers AI model for `aiwass agent`
+# WORKERS_AI_MODEL=@cf/meta/llama-3.1-8b-instruct
