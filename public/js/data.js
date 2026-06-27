@@ -87,7 +87,7 @@ function offline() {
 function notBound() {
   return [
     c.amber('sql: D1 database not bound yet.'),
-    c.gray('  HERMIT-OS will not fake a database. To make `sql` real:'),
+    c.gray('  hermit will not fake a database. To make `sql` real:'),
     c.gray('   1. Dashboard → Workers & Pages → D1 → Create database (e.g. hermit-os-db)'),
     c.gray('   2. Pages project → Settings → Functions → D1 bindings → ') + c.cyan('HERMIT_DB') + c.gray(' → that db'),
     c.gray('   3. Seed it: paste ') + c.cyan('schema.sql') + c.gray(' in the D1 console (or POST /api/admin/seed)'),

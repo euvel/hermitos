@@ -119,13 +119,18 @@ function wireStatus() {
 
   bus.on('fps', ({ fps }) => { fpsEl.textContent = fps + ' fps'; });
 
+  // show the real Cloudflare PoP serving this request, once known
+  fetch('/api/whereami').then(r => r.ok ? r.json() : null).then(d => {
+    if (d && d.edge && d.colo && !state.elevated) sInfo.textContent = `edge: ${d.colo}`;
+  }).catch(() => {});
+
   bus.on('turbulence', ({ on }) => {
     led.classList.toggle('unstable', on);
-    sMetric.textContent = on ? 'metric: DIVERGING' : 'metric: degenerate';
+    sMetric.textContent = on ? 'systems: turbulent' : 'systems: nominal';
     $('shell').classList.toggle('turbulent', on);
   });
   bus.on('elevate', ({ on }) => {
-    sInfo.textContent = on ? 'I(obs)=LEAKING' : 'I(obs)=const';
+    sInfo.textContent = on ? 'mode: kernel' : 'edge: ready';
     sInfo.style.color = on ? '#ff4d4d' : '';
     document.documentElement.style.setProperty('--led', on ? '#ff4d4d' : '');
   });

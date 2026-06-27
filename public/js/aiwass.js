@@ -49,7 +49,7 @@ async function guide(ctx, send, piped) {
   const t = ctx.term;
   const lines = [
     '',
-    c.mag('  ▟▙ AIWASS ') + c.gray('— resident intelligence of HERMIT-OS'),
+    c.mag('  ▟▙ AIWASS ') + c.gray('— resident intelligence of hermit'),
     c.gray('  ─────────────────────────────────────────────────────'),
     c.white('  Observer. You stand at the boundary ∂M, reading the shadow Euvel'),
     c.white('  casts onto the line of the observable. I am the map\'s caretaker.'),

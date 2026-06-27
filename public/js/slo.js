@@ -10,7 +10,7 @@
 import { c } from './shell.js';
 
 // SLO definition (the contract we hold ourselves to)
-const SLO = { avail: 99.9, p95: 250 };      // % availability, ms p95 latency
+const SLO = { avail: 99.9, p95: 400 };      // % availability, ms p95 latency (edge RTT-realistic)
 const WINDOW = 40;                           // rolling samples
 const SPARK = '▁▂▃▄▅▆▇█';
 
@@ -166,10 +166,12 @@ function draw(st) {
   const budgetConsumed = errRate / (1 - SLO.avail / 100);     // 1.0 = budget spent at this rate
   const burn = budgetConsumed;
   const f = st.fault;
-  const degraded = !!f || p95 > SLO.p95 || errRate > 0;
+  // DEGRADED = an availability/budget breach or an active fault — not a single
+  // slow probe. A naturally-high p95 is shown as an indicator, not an alarm.
+  const degraded = !!f || avail < SLO.avail || burn >= 1;
 
   const head = [
-    c.amber('HERMIT-OS') + c.gray(' · SRE CONSOLE') + c.gray('  — live SLO from real edge telemetry') + c.gray('        [q]uit'),
+    c.amber('hermit') + c.gray(' · SRE console') + c.gray('  — live SLO from real edge telemetry') + c.gray('        [q]uit'),
     c.gray('────────────────────────────────────────────────────────────────────'),
   ];
 
@@ -182,15 +184,15 @@ function draw(st) {
       c.gray('      • locally via  ') + c.cyan('npx wrangler pages dev public --kv HERMIT_KV'),
       '',
       c.gray('    (a plain static server has no edge, so there is nothing real to measure —'),
-      c.gray('     and HERMIT-OS will not fake it.)'),
+      c.gray('     and hermit will not fake it.)'),
       '',
       c.gray('────────────────────────────────────────────────────────────────────'),
     ]).join('\n');
   }
 
   const stateLine = degraded
-    ? c.red('  ◉ DEGRADED') + (f ? c.gray(`   chaos active: ${f.kind} · ${f.latency}ms · ${(f.errorRate*100).toFixed(0)}% err · heals in ${Math.max(0,Math.round((f.until-Date.now())/1000))}s`) : c.gray('   (latency/errors over SLO)'))
-    : c.green('  ● HEALTHY') + c.gray('   real endpoints within SLO');
+    ? c.red('  ◉ DEGRADED') + (f ? c.gray(`   chaos active: ${f.kind} · ${f.latency}ms · ${(f.errorRate*100).toFixed(0)}% err · heals in ${Math.max(0,Math.round((f.until-Date.now())/1000))}s`) : c.gray('   (error budget burning)'))
+    : c.green('  ● STEADY') + c.gray('   availability within SLO · ') + c.cyan('chaos inject') + c.gray(' to perturb it');
 
   const availCol = avail >= SLO.avail ? c.green : c.red;
   const p95Col = p95 <= SLO.p95 ? c.green : c.red;
@@ -209,7 +211,7 @@ function draw(st) {
     c.gray('  inject:  ') + c.cyan('chaos inject --latency 300ms') + c.gray('   ·   ') + c.cyan('chaos inject --errors 25%'),
     c.gray('  recover: ') + c.cyan('chaos recover') + c.gray('     (faults also self-heal ≤60s)'),
     c.gray('────────────────────────────────────────────────────────────────────'),
-    c.gray('  the observable baseline π holds: real, bounded, continuous output.'),
+    c.gray('  measured live from real /api/ping round-trips — no synthetic data.'),
   ]).join('\n');
 }
 
@@ -223,7 +225,7 @@ async function postFault(body) {
 
 function offlineMsg() {
   return c.red('chaos: edge offline.') + c.gray(' Real fault injection needs the Pages Functions + KV. Run ') +
-    c.cyan('npx wrangler pages dev public --kv HERMIT_KV') + c.gray(' or use the deployed site. HERMIT-OS will not fake it.');
+    c.cyan('npx wrangler pages dev public --kv HERMIT_KV') + c.gray(' or use the deployed site. it will not fake it.');
 }
 
 function argVal(args, flag) {

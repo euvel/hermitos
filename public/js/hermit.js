@@ -175,7 +175,7 @@ export function hermitCommands(core, send) {
           return '';
         }
         const seq = [
-          'SeaBIOS (HERMIT-OS edition)',
+          'SeaBIOS (hermit edition)',
           'Loading non-ergodic singular orbifold .....',
           'Probing degenerate metric tensor ......... ok',
           'Mounting invariant trapping sets ......... ok (ro, entry-only)',
