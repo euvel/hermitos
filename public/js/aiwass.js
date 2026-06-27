@@ -183,7 +183,8 @@ async function persistDirective(ctx, directive) {
   try {
     await fetch('/api/admin/aiwass', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-hermit-elevated': ctx.state.elevationToken || '' },
+      headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin',          // HttpOnly session cookie authorizes the write
       body: JSON.stringify({ directive }),
     });
   } catch (_) { /* local-only is fine */ }

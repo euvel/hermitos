@@ -1,36 +1,33 @@
 /* ===================================================================
-   Guard for /api/admin/*  — the only write path into the kernel.
+   Gate for /api/admin/*  — the only write path into the kernel.
 
-   Elevation gate:
-   - Requires env.KERNEL_TOKEN to be set (Dashboard → Vars, mark as secret).
-   - Requests must present it in header `x-hermit-elevated` (constant-time
-     compared). The in-browser gluing ritual unlocks the editor UI; this
-     token is what actually authorizes persistence to KV.
-   - If KERNEL_TOKEN is unset, writes are refused (fail closed) with a hint.
+   Auth model (professional, defence-in-depth):
+   - `login` / `logout` are exempt (that's how you get / drop a session).
+   - Every other admin request must carry a valid `hermit_session` cookie:
+     an HMAC-signed, expiring token issued by /api/admin/login. The cookie
+     is HttpOnly + SameSite=Strict (+ Secure on https), so JS can't read it
+     and it isn't sent cross-site (CSRF mitigation). The master KERNEL_TOKEN
+     is never stored client-side.
+   - Fails closed if KERNEL_TOKEN is unset.
    =================================================================== */
 
+import { verifySession, readSessionCookie } from './_session.js';
+
 export async function onRequest({ request, env, next }) {
-  const expected = env.KERNEL_TOKEN;
-  if (!expected) {
-    return json({ ok: false, error: 'KERNEL_TOKEN not configured. Set it in Dashboard → Settings → Variables (encrypt it), then `kernel auth <token>` in the terminal.' }, 503);
+  const url = new URL(request.url);
+  if (url.pathname.endsWith('/admin/login') || url.pathname.endsWith('/admin/logout')) {
+    return next();
   }
-  const provided = request.headers.get('x-hermit-elevated') || '';
-  if (!timingSafeEqual(provided, expected)) {
-    return json({ ok: false, error: 'permission denied — the gluing did not authorize this write. `kernel auth <token>` first.' }, 401);
+  if (!env.KERNEL_TOKEN) {
+    return json({ ok: false, error: 'KERNEL_TOKEN not configured. Set it in Dashboard → Settings → Variables (encrypted).' }, 503);
+  }
+  const ok = await verifySession(env.KERNEL_TOKEN, readSessionCookie(request));
+  if (!ok) {
+    return json({ ok: false, error: 'unauthenticated — run `kernel auth` first (session missing or expired).' }, 401);
   }
   return next();
 }
 
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
+  return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }

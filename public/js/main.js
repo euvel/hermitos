@@ -20,7 +20,7 @@ const state = {
   elevated: false,
   metricDegen: 0.55,
   kam: 0,
-  elevationToken: '',   // armed via `kernel auth <token>` (must match KERNEL_TOKEN)
+  // no secret is stored client-side; kernel auth uses an HttpOnly session cookie
 };
 
 /* ── boot splash ─────────────────────────────────────────────────── */

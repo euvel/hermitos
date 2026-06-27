@@ -208,9 +208,25 @@ export class Shell {
     this.redraw();
   }
 
+  /* ── masked secret entry (passwords/tokens: never echoed, never in history) */
+  readSecret(label) {
+    return new Promise((resolve) => {
+      this.write('\r\n' + label);
+      this.secretMode = { buf: '', resolve };
+    });
+  }
+  onSecretKey(data) {
+    const sm = this.secretMode;
+    if (data === '\r') { this.write('\r\n'); this.secretMode = null; sm.resolve(sm.buf); return; }
+    if (data === '\x03' || data === '\x1b') { this.write('\r\n'); this.secretMode = null; sm.resolve(null); return; } // Ctrl-C / Esc cancels
+    if (data === '\x7f') { if (sm.buf) sm.buf = sm.buf.slice(0, -1); return; }                                        // backspace, silent
+    if (data.charCodeAt(0) >= 32) sm.buf += data;                                                                     // accept, no echo
+  }
+
   /* ── key handling ───────────────────────────────────────────────── */
   onKey(data) {
     if (this.liveMode) { this.liveMode.onKey(data); return; } // live dashboard owns keys
+    if (this.secretMode) { this.onSecretKey(data); return; }  // masked password entry
     if (this.busy) return;             // ignore input while a command runs
     const code = data.charCodeAt(0);
 
