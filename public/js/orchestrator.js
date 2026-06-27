@@ -219,21 +219,30 @@ export class Cluster {
   }
 
   startWorker(p) {
-    if (typeof Worker === 'undefined') { p.phase = 'Running'; return; }   // non-browser fallback
+    if (typeof Worker === 'undefined') { p.phase = 'Running'; return; }   // non-browser fallback (tests)
     try {
       const w = new Worker(this.workerUrl);
       p.worker = w;
       w.onmessage = (e) => {
         const m = e.data;
-        if (m.type === 'ready') p.phase = 'Running';
+        if (m.type === 'ready') p.phase = 'Running';        // becomes Running only after startup delay
         else if (m.type === 'metrics') { p.metrics = m; }
         else if (m.type === 'crash') { p.phase = 'CrashLoopBackOff'; p.reason = m.reason; p.crashedAt = Date.now(); this.termWorker(p); }
       };
       w.onerror = () => { p.phase = 'CrashLoopBackOff'; p.reason = 'worker error'; p.crashedAt = Date.now(); };
-      w.postMessage({ type: 'init', workload: p.image, crashAfter: p.image === 'fault' ? 4000 : 0 });
+      // realistic container startup latency (image pull + init) so scheduling /
+      // rescheduling is actually watchable. The worker only boots after this.
+      const startupMs = 1400 + Math.random() * 1800;
+      p._initT = setTimeout(() => {
+        if (p.worker === w) w.postMessage({ type: 'init', workload: p.image, crashAfter: p.image === 'fault' ? 4000 : 0 });
+      }, startupMs);
     } catch (_) { p.phase = 'Running'; }
   }
-  termWorker(p) { if (p && p.worker) { try { p.worker.postMessage('stop'); p.worker.terminate(); } catch (_) {} p.worker = null; } }
+  termWorker(p) {
+    if (!p) return;
+    if (p._initT) { clearTimeout(p._initT); p._initT = null; }
+    if (p.worker) { try { p.worker.postMessage('stop'); p.worker.terminate(); } catch (_) {} p.worker = null; }
+  }
 
   /* chaos: take a node down → evict + reschedule (real) */
   killNode(name) {

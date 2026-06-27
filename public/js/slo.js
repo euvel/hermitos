@@ -99,11 +99,12 @@ export function sloCommands(send) {
           if (!r) return send(c.red(`node "${target}" not found. nodes: ${cl.nodes.map(n => n.colo).join(', ')}`), ctx, piped);
           ctx.bus.emit('chaos:fail', { kind: 'node' });
           ctx.bus.emit('orbifold:stress', { v: 0.6 });
-          setTimeout(() => { cl.reviveNode(r.node); ctx.bus.emit('orbifold:stress', { v: 0 }); }, 9000);
-          return send([
-            c.red(`◉ node ${r.node} killed`) + c.gray(`  — evicted ${r.evicted} real pod(s); the reconciler is rescheduling onto healthy nodes.`),
-            c.gray('watch it converge: ') + c.cyan('kubectl get pods -w') + c.gray('   (node revives in ~9s)'),
-          ].join('\n'), ctx, piped);
+          setTimeout(() => { cl.reviveNode(r.node); ctx.bus.emit('orbifold:stress', { v: 0 }); }, 14000);
+          ctx.shell.out(c.red(`◉ node ${r.node} killed`) + c.gray(`  — evicted ${r.evicted} real pod(s). reconciler is rescheduling…`));
+          ctx.shell.out(c.gray('opening the live view — pods will go Pending → ContainerCreating → Running on healthy nodes. press ') + c.cyan('q') + c.gray(' to exit; node revives in ~14s.'));
+          // auto-launch the watch so the reschedule is impossible to miss
+          if (!piped || !piped.piped) setTimeout(() => { if (!ctx.shell.liveMode) ctx.shell.run('kubectl get pods -w'); }, 700);
+          return '';
         }
 
         if (sub === 'status') {
