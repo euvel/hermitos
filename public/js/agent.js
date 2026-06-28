@@ -11,28 +11,33 @@
 
 import { c } from './shell.js';
 import { fs, resolve, readFile, listDir } from './filesystem.js';
+import { runPython } from './python.js';
 
 const MAX_STEPS = 6;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const SYSTEM = `You are the AIWASS agent operating HERMIT-OS — the living résumé of Euvel.
-You answer a user GOAL by taking iterative actions with tools, ReAct-style.
+const SYSTEM = `You are AIWASS, an autonomous engineering assistant operating a real terminal.
+Answer the GOAL by taking iterative steps with tools, ReAct-style — be genuinely useful.
 
 Respond with ONE JSON object per turn, nothing else:
-{"thought":"brief reasoning","action":"sql|grep|read|final","input":"..."}
+{"thought":"brief","action":"python|sql|grep|read|final","input":"..."}
 
-TOOLS:
-- sql   : a single read-only SQL SELECT over Cloudflare D1.
-          Tables: projects(id,name,stack,year,impact,url),
-                  experience(id,role,org,start_year,end_year,summary),
-                  skills(id,area,name,level)   -- area ∈ devops,linux,development,ai
-- grep  : full-text search across the skill tree (returns file:line snippets).
-- read  : read one file by absolute path, e.g. /skills/devops/chaos.engineering
-          (dirs: /skills/devops /skills/linux /skills/development /skills/ai ; also /home/euvel/manifesto.txt)
-- final : input is your final answer to the user (dense, evidence-based, 2-5 sentences).
+TOOLS (use the FEWEST that get the job done):
+- python : run real Python 3 (Pyodide). Use for ANY math, logic, proof, calculation,
+           algorithm, simulation, or verification. print() the result. You may
+           import numpy / sympy (auto-installed). This is your main reasoning tool.
+- sql    : ONE read-only SQLite SELECT over the owner's résumé DB.
+           projects(name,stack,year,impact,url) · experience(role,org,start_year,end_year,summary) · skills(area,name,level)
+- grep   : search the skill tree for a term — only for questions about the owner's skills.
+- read   : read a file, e.g. /skills/ai/applied-ml.txt
+- final  : your answer to the user.
 
-Use 1-4 tool steps, then finish with action "final". Ground claims in what tools return.
-Stay in Euvel's register: precise, a little austere, mathematically inflected.`;
+ROUTING:
+- Math / computation / proofs / "calculate X" → python (e.g. import sympy; print(sympy.simplify(...))).
+- About the owner's skills / projects / experience → sql, then grep/read if useful.
+- General knowledge you already know confidently → answer directly with final. Do NOT grep for it.
+Never grep vague phrases hoping for a hit. If two tool calls return nothing useful, switch tactic or finalize.
+Final answers: correct first, concise, no purple prose.`;
 
 export async function runAgent(ctx, goal) {
   const term = ctx.term;
@@ -103,11 +108,18 @@ async function callPlanner(messages, ctx) {
 /* ── tools (all real) ────────────────────────────────────────────── */
 async function runTool(action, input, ctx) {
   try {
+    if (action === 'python') return await toolPython(input, ctx);
     if (action === 'sql') return await toolSql(input);
     if (action === 'grep') return toolGrep(input, ctx);
     if (action === 'read') return toolRead(input, ctx);
   } catch (e) { /* fall through */ }
   return { display: `unknown action '${action}'`, model: `error: unknown action ${action}` };
+}
+
+async function toolPython(code, ctx) {
+  const out = await runPython(ctx, String(code || ''));
+  const flat = out.replace(/\n+/g, ' ⏎ ').trim();
+  return { display: flat ? flat.slice(0, 120) : '(no output)', model: out.slice(0, 1200) || '(no output)' };
 }
 
 async function toolSql(query) {
@@ -159,8 +171,14 @@ function toolRead(path, ctx) {
 }
 
 /* ── deterministic fallback planner (no LLM bound) ───────────────── */
+const MATHY = /[0-9]|prove|calcul|compute|factor|prime|integral|deriv|matrix|equation|solve|sum|sqrt|theorem|simplify|=|\+|\*|\^/i;
 function heuristicStep(goal, ctx, step) {
   const g = goal.toLowerCase();
+  // math/computation → Python
+  if (MATHY.test(goal) && !/skill|project|experience|euvel|owner|résumé|resume|devops|kubernetes/i.test(goal)) {
+    if (step === 1) return { thought: 'this is computational — solving it in Python.', action: 'python', input: pyFor(goal) };
+    return { thought: 'reporting the computed result.', action: 'final', input: 'See the computed output above.' };
+  }
   const kw = ['kubernetes', 'chaos', 'linux', 'kernel', 'ebpf', 'rust', 'go', 'python', 'ai', 'rag', 'terraform', 'sre', 'observability']
     .find(k => g.includes(k)) || g.split(/\s+/).filter(w => w.length > 4)[0] || 'devops';
   if (step === 1) return { thought: `searching the skill tree for evidence of "${kw}".`, action: 'grep', input: kw };
@@ -172,6 +190,13 @@ function heuristicStep(goal, ctx, step) {
   return { thought: 'synthesizing.', action: 'final', input: synth(goal) };
 }
 
+function pyFor(goal) {
+  const g = goal.toLowerCase();
+  if (g.includes('pythagor')) return "import sympy as sp\na,b=sp.symbols('a b',positive=True)\nc=sp.sqrt(a**2+b**2)\nprint('c^2 =', sp.simplify(c**2), '= a^2+b^2  ✓ (by definition of the hypotenuse)')";
+  if (g.includes('prime')) return "import sympy as sp\nprint('100th prime =', sp.prime(100))";
+  if (/1\s*\+\s*1/.test(g)) return "import sympy as sp\nprint('1+1 =', sp.Integer(1)+sp.Integer(1), '==2 ?', sp.Integer(1)+sp.Integer(1)==2)";
+  return "import sympy as sp\n# best-effort symbolic evaluation of the request\nprint(sp.N(sp.sympify('" + goal.replace(/[^0-9+\-*/^(). ]/g, '') + "')))";
+}
 function skillPathFor(g) {
   if (/linux|kernel|ebpf|trace/.test(g)) return '/skills/linux/kernel.internals';
   if (/python|rust|go|api|develop/.test(g)) return '/skills/development/languages.txt';

@@ -211,6 +211,20 @@ html, body {
 /* split-view active */
 #shell.dissociated #kernel-pane { display: flex; }
 
+/* dissociation — identity fracture glitch */
+@keyframes fracture {
+  0%, 100% { transform: translate(0,0); filter: none; }
+  15% { transform: translate(-3px, 1px); filter: hue-rotate(40deg) saturate(1.6); }
+  30% { transform: translate(3px, -2px); filter: hue-rotate(-35deg); }
+  45% { transform: translate(-2px, 0);  filter: contrast(1.5) brightness(1.1); }
+  60% { transform: translate(2px, 1px); filter: hue-rotate(20deg); }
+  75% { transform: translate(-1px, -1px); filter: none; }
+}
+#shell.fracturing #split { animation: fracture .55s steps(2) 2; }
+body.dissociated #term-pane { box-shadow: inset 0 0 70px rgba(217,111,224,.10); }
+body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--magenta); opacity: .8; }
+#kernel-pane .kernel-head { color: var(--magenta); border-color: rgba(217,111,224,.3); text-shadow: 0 0 6px rgba(217,111,224,.4); }
+
 /* turbulence shake */
 #shell.turbulent #term-pane { animation: shake .28s infinite; }
 @keyframes shake {
@@ -423,10 +437,76 @@ html, body {
   #nn-field { max-height: 60vh; }
 }
 
+/* ── dynamical-systems lab (Lorenz / Lyapunov) ───────────────────── */
+#ly-overlay { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
+  background: radial-gradient(120% 80% at 80% 0%, #0a1018 0%, #05080e 55%, #02050a 100%); color: var(--text); font-size: 12px; animation: vmin .28s ease; }
+#ly-top { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(8,12,18,.5); }
+.ly-brand { font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--cyan); display: flex; align-items: center; gap: 9px; font-size: 13px; }
+.ly-brand .ly-sub { font-weight: 400; letter-spacing: .3px; text-transform: none; color: var(--text-dim); font-size: 11px; }
+.ly-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: pulse 2s ease-in-out infinite; }
+.ly-grow { flex: 1; }
+.ly-x { font: 11px var(--mono); cursor: pointer; color: var(--text-dim); background: transparent; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: 5px 11px; }
+.ly-x:hover { color: #fff; border-color: rgba(255,255,255,.3); }
+#ly-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px 1fr; gap: 14px; padding: 14px 18px 18px; }
+.ly-panel { background: linear-gradient(180deg, rgba(14,20,28,.55), rgba(10,15,22,.4)); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
+.ly-h { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--text-dim); margin-top: 4px; display: flex; justify-content: space-between; align-items: baseline; }
+.ly-hv { color: var(--cyan); }
+.ly-kv { display: flex; justify-content: space-between; font-size: 11px; }
+.ly-kv span { color: var(--text-dim); } .ly-kv b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ly-metric { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 8px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 8px; }
+.ly-metric span { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--text-dim); }
+.ly-metric b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ly-range { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 3px; background: rgba(255,255,255,.1); outline: none; }
+.ly-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(79,214,204,.6); cursor: pointer; border: 2px solid #04060a; }
+.ly-pre-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+.ly-pre, .ly-btn { font: 11px var(--mono); cursor: pointer; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 7px; padding: 6px 4px; }
+.ly-pre:hover, .ly-btn:hover { border-color: rgba(79,214,204,.5); color: var(--cyan); }
+.ly-chart { width: 100%; height: 70px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05); border-radius: 8px; }
+.ly-ctl { display: flex; gap: 7px; }
+.ly-tip { margin-top: auto; font-size: 10.5px; line-height: 1.5; color: var(--text-dim); padding-top: 10px; border-top: 1px solid rgba(255,255,255,.05); }
+.ly-center { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.ly-canvas-h { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-dim); display: flex; justify-content: space-between; }
+.ly-canvas-h span { text-transform: none; letter-spacing: .3px; opacity: .7; }
+.ly-attwrap { flex: 1; min-height: 0; }
+#ly-att { width: 100%; height: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 0 60px rgba(79,214,204,.07); display: block; }
+@media (max-width: 720px) { #ly-grid { grid-template-columns: 1fr; grid-auto-rows: min-content; overflow-y: auto; } #ly-att { height: 52vh; } }
+
 /* responsive */
 @media (max-width: 760px) {
-  #kernel-pane { display: none !important; }
   #shell.dissociated #split { flex-direction: column; }
   #topbar .mono#status-load { display:none; }
   #hint { font-size: 10px; }
+}
+
+/* phones */
+@media (max-width: 640px) {
+  #topbar {
+    flex-wrap: wrap; gap: 6px 8px; padding: 6px 10px; font-size: 11px;
+    row-gap: 4px;
+  }
+  #topbar .sep { display: none; }
+  #topbar .grow { flex-basis: 100%; height: 0; }       /* force the chip onto its own row edge */
+  #topbar #status-metric, #topbar #status-info { font-size: 10px; }
+  #btn-dissociate { margin-left: auto; }
+
+  #term-pane { padding: 4px 4px 2px 8px; }
+  #kernel-pane { display: none !important; }            /* split view stacks instead */
+  #shell.dissociated #split { flex-direction: column; }
+  #shell.dissociated #kernel-pane { display: flex !important; min-width: 0; width: auto; height: 38%; }
+
+  #hint { flex-wrap: wrap; gap: 4px 8px; padding: 5px 10px; font-size: 9.5px; line-height: 1.4; }
+  #hint .grow, #hint #fps { display: none; }
+
+  /* full-screen overlays: stack panels, shrink chrome */
+  #vm-bar .vm-note, #nn-top .nn-sub { display: none; }
+  #vm-stage { flex-direction: column; }
+  #nn-grid { grid-template-columns: 1fr; grid-auto-rows: min-content; overflow-y: auto; }
+  .nn-acc { display: none; }
+  #nn-field { max-height: 52vh; }
+}
+
+/* fine-tune the very small end */
+@media (max-width: 380px) {
+  #topbar .hostid { letter-spacing: 1px; }
+  #hint code { padding: 0 3px; }
 }

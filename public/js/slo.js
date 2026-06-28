@@ -90,6 +90,12 @@ export function sloCommands(send) {
       async run(args, ctx, piped) {
         const sub = args[0] || 'status';
 
+        // the dynamical-systems view of chaos: Lorenz attractor + Lyapunov exponent
+        if (sub === 'lyapunov' || sub === 'attractor' || sub === 'dynamics') {
+          const { lorenzCommands } = await import('./lorenz.js');
+          return lorenzCommands(send).lyapunov.run([], ctx, piped);
+        }
+
         // chaos against the in-browser orchestrator: kill a node, watch it self-heal
         if (sub === 'node' || sub === 'kill') {
           const cl = ctx.state.k8s;

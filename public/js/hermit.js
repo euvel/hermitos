@@ -41,13 +41,28 @@ export function hermitCommands(core, send) {
     },
 
     dissociate: {
-      desc: 'split view: clean resume | raw kernel',
-      run(args, ctx, piped) {
+      desc: 'fracture the identity into its alters (dissociation)',
+      async run(args, ctx, piped) {
         ctx.state.dissociated = !ctx.state.dissociated;
-        ctx.bus.emit('dissociate', { on: ctx.state.dissociated });
-        return send(ctx.state.dissociated
-          ? c.amber('dissociated. left: the section you are allowed to read. right: the raw kernel stream.\nthe two do not glue. that is not a bug; it is the persona.')
-          : c.gray('re-associated. the global section is, once again, refused — but hidden.'), ctx, piped);
+        const on = ctx.state.dissociated;
+        ctx.bus.emit('dissociate', { on });
+        if (!on) return send(c.gray('re-integration — the alters collapse back to one observable self.'), ctx, piped);
+
+        const t = ctx.term;
+        t.write('\r\n' + c.mag('▚ dissociation onset') + c.gray(' — identity is not a global section.') + '\r\n\r\n');
+        const alters = [
+          ['alter[0]', 'the operator', 'holds ring-0; signs the sessions; trusts no input'],
+          ['alter[1]', 'the builder',  'writes the kernel, the shaders, the nets; never satisfied'],
+          ['alter[2]', 'the observer', 'measures everything; commits to nothing'],
+          ['alter[3]', 'the kernel',   'turbulent, mostly trapped; the part you cannot hire'],
+        ];
+        for (const [tag, name, trait] of alters) {
+          t.write('  ' + c.amber(tag) + '  ' + c.cyan(name.padEnd(13)) + c.gray(trait) + '\r\n');
+          await sleep(260);
+        }
+        t.write('\r\n' + c.gray('  four locally-consistent selves. each one true. ') + c.mag('they do not glue.') + '\r\n');
+        t.write(c.gray('  run ') + c.green('dissociate') + c.gray(' again to re-integrate.') + '\r\n');
+        return '';
       },
     },
 
@@ -150,29 +165,6 @@ export function hermitCommands(core, send) {
         if (['reset','spin','calm','wild'].includes(m)) { ctx.bus.emit('orbifold:mode', { mode: m });
           return send(c.cyan(`orbifold → ${m}`), ctx, piped); }
         return send(c.gray('orbifold [reset|spin|calm|wild]  — mouse-drag to orbit the camera.'), ctx, piped);
-      },
-    },
-
-    boot: {
-      desc: 'boot a kernel', usage: 'boot kernel [--real]',
-      async run(args, ctx, piped) {
-        if (args[0] !== 'kernel') return send(c.gray('usage: boot kernel [--real]'), ctx, piped);
-        if (args.includes('--real')) {
-          const { bootRealLinux } = await import('./vm.js');   // lazy: v86 only when asked
-          await bootRealLinux(ctx);
-          return '';
-        }
-        const seq = [
-          'SeaBIOS (hermit edition)',
-          'Loading non-ergodic singular orbifold .....',
-          'Probing degenerate metric tensor ......... ok',
-          'Mounting invariant trapping sets ......... ok (ro, entry-only)',
-          'Starting AIWASS resident intelligence .... ok',
-          'Refusing to glue global section .......... by design',
-          'observable baseline ...................... const',
-        ];
-        for (const s of seq) { ctx.term.write(c.gray('[boot] ') + c.cyan(s) + '\r\n'); await sleep(140); }
-        return send(c.green('kernel booted into the projection. you are already inside it.'), ctx, piped);
       },
     },
   };

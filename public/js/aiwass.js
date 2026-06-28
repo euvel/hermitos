@@ -57,11 +57,11 @@ async function guide(ctx, send, piped) {
     c.cyan('  What you may do here:'),
     c.gray('   • ') + c.green('train') + c.gray(' — watch a neural network learn (backprop from scratch)'),
     c.gray('   • ') + c.green('kubectl get pods -w') + c.gray(' — a real orchestrator; ') + c.green('chaos node') + c.gray(' to break it'),
-    c.gray('   • ') + c.green('boot kernel --real') + c.gray(' — a real x86 Linux kernel in the browser'),
+    c.gray('   • ') + c.green('linux') + c.gray(' — a real x86 Linux kernel in the browser'),
     c.gray('   • ') + c.green('sql "…"') + c.gray(', ') + c.green('python3') + c.gray(' — real edge SQL, real CPython'),
     c.gray('   • ') + c.green('aiwass ask "..."') + c.gray(' — ask about the skills, the system, or the math'),
     '',
-    c.gray('  the shell is real — try ') + c.green('python3') + c.gray(', ') + c.green('kubectl get pods -w') + c.gray(', ') + c.green('train') + c.gray(', ') + c.green('boot kernel --real') + c.gray('.'),
+    c.gray('  the shell is real — try ') + c.green('python3') + c.gray(', ') + c.green('kubectl get pods -w') + c.gray(', ') + c.green('train') + c.gray(', ') + c.green('linux') + c.gray('.'),
     '',
   ];
   for (const l of lines) { t.write(l + '\r\n'); await sleep(45); }

@@ -1,14 +1,26 @@
 /* ===================================================================
-   HERMIT-OS — `boot kernel --real` : a GENUINE x86 Linux kernel in the
-   browser via v86 (WASM). Not the projection — a real kernel you can
-   `uname -a`, `unshare`, `strace`, mount, and break.
+   hermit — `linux` : a real x86 Linux kernel in the browser via v86 (WASM).
+   `uname -a`, `unshare`, `strace`, mount — it all works; it's a real kernel.
 
    The disk/state image is SELF-HOSTED: drop your files in /public/vm/
    and describe them in /public/vm/manifest.json. See public/vm/README.md.
-   If no manifest is present, this degrades honestly (no fakery).
+   If no manifest is present, this degrades honestly.
    =================================================================== */
 
 import { c } from './shell.js';
+
+export function vmCommands(send) {
+  const run = {
+    desc: 'boot a real x86 Linux kernel (v86) in the browser',
+    usage: 'linux',
+    async run(args, ctx, piped) {
+      await bootRealLinux(ctx);
+      return '';
+    },
+  };
+  // `linux` is the canonical name; `vm` and `boot` are aliases
+  return { linux: run, vm: { ...run, desc: 'alias: linux' }, boot: { ...run, desc: 'alias: linux' } };
+}
 
 const LIBV86 = 'https://cdn.jsdelivr.net/npm/v86@0.5.228/build/libv86.js';
 const DEFAULTS = {
@@ -219,13 +231,13 @@ function instructions() {
   return [
     c.amber('boot: no real-Linux image installed yet.') + c.gray('  HERMIT-OS will not fake a kernel.'),
     '',
-    c.gray('  `boot kernel --real` runs a GENUINE x86 Linux kernel in the browser via v86.'),
+    c.gray('  `linux` runs a GENUINE x86 Linux kernel in the browser via v86.'),
     c.gray('  To enable it, self-host a small image (a few MB) and a manifest:'),
     '',
     c.gray('   1. put a v86-compatible image in ') + c.cyan('public/vm/') + c.gray('  (ISO, bzImage+initrd, or a saved state)'),
     c.gray('   2. create ') + c.cyan('public/vm/manifest.json') + c.gray('  — see ') + c.cyan('public/vm/README.md') + c.gray(' for ready-to-copy examples'),
-    c.gray('   3. redeploy. `boot kernel --real` will then boot it full-screen.'),
+    c.gray('   3. redeploy. `linux` will then boot it full-screen.'),
     '',
-    c.gray('  Meanwhile, the narrated boot is available: ') + c.green('boot kernel'),
+    c.gray('  See public/vm/README.md to add an image.'),
   ].join('\n');
 }

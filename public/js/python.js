@@ -47,7 +47,33 @@ function loadScript(src) {
   });
 }
 
-async function ensurePyodide(ctx) {
+// run code and capture stdout/stderr as a string (for the agent — not echoed to the terminal)
+const AGENT_SETUP = `
+import io, contextlib, traceback
+__agent_ns = {"__name__": "__agent__"}
+def __agent_run(code):
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            exec(code, __agent_ns)
+    except BaseException:
+        traceback.print_exc(file=buf)
+    return buf.getvalue()
+`;
+
+export async function runPython(ctx, code) {
+  const py = await ensurePyodide(ctx);
+  if (!ctx.state._agentPy) { await py.runPythonAsync(AGENT_SETUP); ctx.state._agentPy = true; }
+  try { await py.loadPackagesFromImports(code); } catch (_) {}   // auto-load numpy/sympy/etc if imported
+  try {
+    const out = await py.runPythonAsync(`__agent_run(${JSON.stringify(code)})`);
+    return String(out || '').trim();
+  } catch (e) {
+    return String(e && e.message ? e.message : e);
+  }
+}
+
+export async function ensurePyodide(ctx) {
   if (ctx.state.pyodide) return ctx.state.pyodide;
   if (ctx.state.pyLoadError) throw new Error(ctx.state.pyLoadError);
 

@@ -163,11 +163,29 @@ export function kernelCommands(send, core) {
             c.cyan('  kernel add skill area=devops name="Kubernetes" level=5'),
             c.cyan('  kernel edit <table> <id> field="new value"') + c.gray('       update fields'),
             c.cyan('  kernel rm <table> <id>') + c.gray('                          delete a row'),
+            c.cyan('  kernel seed') + c.gray('                                     reset to schema + sample rows (confirm)'),
             c.cyan('  aiwass retrain "<directive>"') + c.gray('                    steer AIWASS'),
             c.cyan('  kernel lock') + c.gray('                                     end the session'),
             '',
             c.gray('  fields — ') + Object.entries(TABLES).map(([t, cols]) => c.cyan(t) + c.gray('(' + cols.join(',') + ')')).join('  '),
           ].join('\n'), ctx, piped);
+        }
+
+        if (sub === 'seed') {
+          ctx.shell.out(c.amber('seed: this DROPs and recreates projects/experience/skills with sample rows.'));
+          const confirm = await ctx.shell.readSecret(c.gray('type "yes" to confirm: '));
+          if (confirm !== 'yes') return send(c.gray('seed cancelled.'), ctx, piped);
+          ctx.shell.out(c.gray('seeding fs/resume (D1) …'));
+          try {
+            const r = await fetch('/api/admin/seed', { method: 'POST', credentials: 'same-origin' });
+            const d = await r.json().catch(() => ({}));
+            if (r.status === 401) return send(c.red('session expired — run `kernel auth` again.'), ctx, piped);
+            if (!d.ok) return send(c.red('seed: ' + (d.error || ('HTTP ' + r.status))), ctx, piped);
+            const s = d.seeded || {};
+            return send(c.green('seeded.') + c.gray(`  projects=${s.projects ?? '?'} experience=${s.experience ?? '?'} skills=${s.skills ?? '?'}  — \`kernel ls\` to view.`), ctx, piped);
+          } catch (e) {
+            return send(c.amber('seed: edge unreachable (local mode).'), ctx, piped);
+          }
         }
 
         if (sub === 'ls' || sub === 'get' || sub === 'dashboard') {

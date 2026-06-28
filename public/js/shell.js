@@ -52,7 +52,8 @@ export class Shell {
     else if (p.startsWith('/home/euvel/')) p = '~' + p.slice('/home/euvel'.length);
     const tag = this.ctx.state.elevated ? c.red('kernel') : c.green('observer');
     const host = this.ctx.state.elevated ? c.red('orbifold') : c.cyan('projection');
-    return `${tag}${c.gray('@')}${host}${c.gray(':')}${c.amber(p)}${c.gray('$')} `;
+    const sigil = this.ctx.state.elevated ? c.red('#') : c.gray('$');   // # = ring-0, like root
+    return `${tag}${c.gray('@')}${host}${c.gray(':')}${c.amber(p)}${sigil} `;
   }
 
   out(line = '') { this.term.write(line.replace(/\n/g, '\r\n') + '\r\n'); }

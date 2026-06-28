@@ -16,6 +16,8 @@ import { codeCommands } from './code.js';
 import { dataCommands } from './data.js';
 import { edgeCommands, edgeLine } from './edge.js';
 import { nnCommands } from './nn.js';
+import { lorenzCommands } from './lorenz.js';
+import { vmCommands } from './vm.js';
 import { aiwassCommands } from './aiwass.js';
 import { kernelCommands } from './kernel.js';
 
@@ -54,9 +56,8 @@ const core = {
         'dev (real)': ['python3', 'source', 'git', 'sql'],
         'labs':       ['train'],
         'intelligence': ['aiwass'],
-        'hermit':     ['whoami', 'observe', 'project', 'dissociate', 'induce', 'glue', 'sheaf', 'orbifold', 'kam', 'metric', 'trap', 'boot'],
-        'devops':     ['chaos', 'watch', 'kubectl', 'helm'],
-        'intelligence':['aiwass'],
+        'systems':    ['linux', 'dissociate', 'induce', 'orbifold', 'metric', 'kam'],
+        'devops':     ['chaos', 'lyapunov', 'watch', 'kubectl', 'helm'],
         'kernel':     ['kernel', 'sudo', 'su'],
         'misc':       ['echo', 'clear', 'history', 'man', 'neofetch', 'banner', 'cowsay', 'fortune', 'base64', 'sha256sum', 'exit'],
       };
@@ -816,6 +817,8 @@ export function buildRegistry(ctx) {
   Object.assign(reg, dataCommands(send));   // REAL SQL over D1
   Object.assign(reg, edgeCommands(send));   // REAL Cloudflare edge awareness
   Object.assign(reg, nnCommands(send));     // live neural-net training lab
+  Object.assign(reg, lorenzCommands(send));  // `lyapunov` — Lorenz attractor + Lyapunov
+  Object.assign(reg, vmCommands(send));      // `linux` — real x86 kernel (v86)
   Object.assign(reg, aiwassCommands(send));
   Object.assign(reg, kernelCommands(send, core));
   return reg;

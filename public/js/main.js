@@ -77,8 +77,15 @@ function makeTerminal() {
   // transparent background so the orbifold shows through
   const xtermEl = $('terminal').querySelector('.xterm-viewport');
   if (xtermEl) xtermEl.style.background = 'transparent';
+  const fontFor = (w) => (w < 480 ? 10 : w < 700 ? 12 : 14);
+  const refit = () => {
+    const fs = fontFor(window.innerWidth);
+    if (term.options.fontSize !== fs) term.options.fontSize = fs;
+    try { fit.fit(); } catch (_) {}
+  };
+  term.options.fontSize = fontFor(window.innerWidth);
   fit.fit();
-  window.addEventListener('resize', () => { try { fit.fit(); } catch (_) {} });
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(refit, 120); });
   return { term, fit };
 }
 
@@ -151,8 +158,17 @@ function wireStatus() {
   });
   bus.on('dissociate', ({ on }) => {
     $('shell').classList.toggle('dissociated', on);
+    document.body.classList.toggle('dissociated', on);
     $('kernel-pane').hidden = !on;
     $('btn-dissociate').classList.toggle('active', on);
+    // one-shot fracture glitch
+    if (on) {
+      $('shell').classList.add('fracturing');
+      setTimeout(() => $('shell').classList.remove('fracturing'), 1100);
+    }
+    // the 3D field churns while dissociated
+    bus.emit('orbifold:stress', { v: on ? 0.45 : 0 });
+    bus.emit('orbifold:pulse', {});
     try { window.__hermit.fit.fit(); } catch (_) {}
   });
 }
@@ -167,8 +183,8 @@ function welcome(shell) {
   shell.out(c.gray('  a real shell with real tools — nothing here is a slideshow. try things.'));
   shell.out('');
   shell.out(c.gray('  start    ') + c.green('help') + c.gray(' · ') + c.green('ls /skills') + c.gray(' · ') + c.green('whoami'));
-  shell.out(c.gray('  systems  ') + c.green('boot kernel --real') + c.gray(' (real x86 linux) · ') + c.green('python3') + c.gray(' (real cpython) · ') + c.green('sql "…"'));
-  shell.out(c.gray('  sre      ') + c.green('watch slo') + c.gray('  +  ') + c.green('chaos inject --latency 300ms') + c.gray('   (real edge telemetry & chaos)'));
+  shell.out(c.gray('  systems  ') + c.green('linux') + c.gray(' (real x86 linux) · ') + c.green('python3') + c.gray(' (real cpython) · ') + c.green('sql "…"'));
+  shell.out(c.gray('  sre      ') + c.green('watch slo') + c.gray('  +  ') + c.green('chaos inject --latency 300ms') + c.gray('  ·  ') + c.green('lyapunov') + c.gray(' (chaos, formally)'));
   shell.out(c.gray('  cluster  ') + c.green('helm install demo webapp') + c.gray(' · ') + c.green('kubectl get pods -w') + c.gray('   (a real orchestrator; pods are real threads)'));
   shell.out(c.gray('  labs     ') + c.green('train') + c.gray('   (a neural network learns, live — backprop from scratch)'));
   shell.out(c.gray('  code     ') + c.green('source shell.js') + c.gray(' (this site\'s own source) · ') + c.green('git log') + c.gray(' · ') + c.green('edge'));
