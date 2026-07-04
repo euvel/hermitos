@@ -462,7 +462,9 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 .ly-pre, .ly-btn { font: 11px var(--mono); cursor: pointer; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 7px; padding: 6px 4px; }
 .ly-pre:hover, .ly-btn:hover { border-color: rgba(79,214,204,.5); color: var(--cyan); }
 .ly-chart { width: 100%; height: 70px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05); border-radius: 8px; }
-.ly-ctl { display: flex; gap: 7px; }
+.ly-ctl { display: flex; gap: 7px; flex-wrap: wrap; }
+.ly-inject { flex: 1 1 100%; color: var(--amber); border-color: rgba(230,168,60,.35); background: rgba(230,168,60,.06); }
+.ly-inject:hover { border-color: rgba(230,168,60,.7); color: var(--amber); background: rgba(230,168,60,.12); }
 .ly-tip { margin-top: auto; font-size: 10.5px; line-height: 1.5; color: var(--text-dim); padding-top: 10px; border-top: 1px solid rgba(255,255,255,.05); }
 .ly-center { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .ly-canvas-h { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-dim); display: flex; justify-content: space-between; }

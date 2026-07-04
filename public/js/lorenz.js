@@ -11,23 +11,8 @@
    =================================================================== */
 
 import { c } from './shell.js';
+import { SIGMA, BETA, lorenzRK4 as rk4, makeLorenzInjector } from './dynamics.js';
 
-const SIGMA = 10, BETA = 8 / 3;
-
-function deriv(s, rho) {
-  const [x, y, z] = s;
-  return [SIGMA * (y - x), x * (rho - z) - y, x * y - BETA * z];
-}
-function rk4(s, rho, h) {
-  const a = deriv(s, rho);
-  const s2 = s.map((v, i) => v + 0.5 * h * a[i]);
-  const b = deriv(s2, rho);
-  const s3 = s.map((v, i) => v + 0.5 * h * b[i]);
-  const cc = deriv(s3, rho);
-  const s4 = s.map((v, i) => v + h * cc[i]);
-  const d = deriv(s4, rho);
-  return s.map((v, i) => v + (h / 6) * (a[i] + 2 * b[i] + 2 * cc[i] + d[i]));
-}
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 export function lorenzCommands(send) {
@@ -132,6 +117,15 @@ function launch(ctx) {
   const pauseBtn = $('#ly-pause');
   pauseBtn.addEventListener('click', () => { running = !running; pauseBtn.textContent = running ? 'pause' : 'resume'; });
 
+  // arm THIS ρ as a real, structured edge fault, then hand off to the SRE console
+  $('#ly-inject').addEventListener('click', () => {
+    ctx.state.chaos = makeLorenzInjector({ rho });
+    ctx.bus.emit('orbifold:stress', { v: 0.5 });
+    detach();
+    ctx.shell.out(c.amber(`⚡ armed lorenz ρ=${rho.toFixed(1)} as a structured edge fault`) + c.gray('  — opening the SRE console; watch its autocorrelation & Hurst signature appear.'));
+    setTimeout(() => { if (!ctx.shell.liveMode) ctx.shell.run('watch slo'); }, 500);
+  });
+
   const detach = () => { cancelAnimationFrame(raf); ov.remove(); document.removeEventListener('keydown', onKey, true); ctx.term.focus(); ctx.shell.out(c.green('dynamical-systems lab closed.')); ctx.shell.prompt(); };
   const onKey = (e) => { if (e.key === 'Escape' || (e.ctrlKey && e.key === ']')) { e.preventDefault(); detach(); } else if (e.key === ' ') { e.preventDefault(); pauseBtn.click(); } };
   document.addEventListener('keydown', onKey, true);
@@ -167,10 +161,11 @@ function buildOverlay() {
         <div class="ly-kv"><span>integrated</span><b id="ly-time">—</b></div>
         <div class="ly-h">λ₁ estimate over time</div>
         <canvas id="ly-sep" class="ly-chart"></canvas>
-        <div class="ly-ctl"><button id="ly-pause" class="ly-btn">pause</button></div>
+        <div class="ly-ctl"><button id="ly-pause" class="ly-btn">pause</button><button id="ly-inject" class="ly-btn ly-inject">inject this ρ → edge ⚡</button></div>
         <div class="ly-tip">λ&gt;0 ⇒ nearby trajectories diverge exponentially: deterministic, yet
           unpredictable. Push ρ past ~24.74 and the system tips into chaos — the same
-          boundary an SLO crosses under fault injection.</div>
+          boundary an SLO crosses under fault injection. <b>inject this ρ → edge</b> arms
+          it as a real fault; then <code>watch slo</code> recovers λ₁ from the round-trips.</div>
       </aside>
       <main class="ly-center">
         <div class="ly-canvas-h">phase space — Lorenz (x, z) projection <span>amber dot = a trajectory 10⁻⁹ away, diverging</span></div>
