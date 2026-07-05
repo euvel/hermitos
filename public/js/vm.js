@@ -14,6 +14,8 @@ export function vmCommands(send) {
     desc: 'boot a real x86 Linux kernel (v86) in the browser',
     usage: 'linux',
     async run(args, ctx, piped) {
+      // if a kernel is already running (backgrounded), just reopen it
+      if (ctx.state.linux && ctx.state.linux.show) { ctx.state.linux.show(); return ''; }
       await bootRealLinux(ctx);
       return '';
     },
@@ -126,38 +128,89 @@ export async function bootRealLinux(ctx) {
     lastC = cNow; lastT = tNow;
   }, 1000);
 
+  // a handle other subsystems (the AIWASS agent) can drive — a real shell
+  // on a real kernel. Populated once, cleared on detach.
+  const linux = { emulator, ready: false, exec: null };
+  ctx.state.linux = linux;
+
   // watch the real serial stream: boot → prompt, optional auto-login
-  let started = false, sbuf = '', ready = false;
+  let started = false, sbuf = '', cap = null;
   const onByte = (byte) => {
     const ch = typeof byte === 'number' ? String.fromCharCode(byte) : String(byte);
     sbuf = (sbuf + ch).slice(-200);
+    if (cap) { cap.buf += ch; cap.check(); }
     if (!started) { started = true; setState('booting', 'warn'); }
     if (/login:\s*$/i.test(sbuf)) { sbuf = ''; emulator.serial0_send('root\n'); }
-    else if (!ready && /[#$%>]\s$/.test(sbuf)) {
-      ready = true; setState('shell ready', 'ok');
+    else if (!linux.ready && /[#$%>]\s$/.test(sbuf)) {
+      linux.ready = true; setState('shell ready', 'ok');
       setTimeout(showShell, 400);   // let the last boot lines settle, then reveal the shell
     }
   };
   try { emulator.add_listener('serial0-output-byte', onByte); } catch (_) {}
 
-  const detach = () => {
+  // ── programmatic exec over the serial line ───────────────────────
+  // Sentinel-framed so capture is unambiguous even with the shell's echo
+  // ON (so the command is VISIBLE in the pane): the boundary markers are
+  // matched only on their OUTPUT form (start followed by a newline; end
+  // followed by digits), which the echoed input line never satisfies.
+  // Commands are queued (one at a time on the single serial line).
+  let execChain = Promise.resolve(), execSeq = 0;
+  linux.exec = (cmd, { timeout = 7000 } = {}) => {
+    const run = () => new Promise((resolve) => {
+      if (!linux.ready) { resolve({ stdout: '', code: null, error: 'shell not ready' }); return; }
+      const id = (++execSeq).toString(36) + Math.random().toString(36).slice(2, 6);
+      const HB = `__HB_${id}__`, HE = `__HE_${id}__`;
+      const startRe = new RegExp(HB + '\\r?\\n');
+      const endRe = new RegExp(HE + ':(\\d+)');
+      let done = false;
+      const finish = (res) => { if (done) return; done = true; clearTimeout(tm); cap = null; resolve(res); };
+      const tm = setTimeout(() => finish({ stdout: cap ? cleanOut(cap.buf) : '', code: null, timedout: true }), timeout);
+      cap = {
+        buf: '',
+        check() {
+          const sm = this.buf.match(startRe); if (!sm) return;
+          const outStart = sm.index + sm[0].length;
+          const em = this.buf.slice(outStart).match(endRe); if (!em) return;
+          finish({ stdout: cleanOut(this.buf.slice(outStart, outStart + em.index)), code: parseInt(em[1], 10) });
+        },
+      };
+      emulator.serial0_send(`echo ${HB}; ${cmd} 2>&1; echo ${HE}:$?\n`);
+    });
+    execChain = execChain.then(run, run);
+    return execChain;
+  };
+
+  // background = keep the kernel running but hidden (so you can drive it
+  // from the main terminal / the AIWASS agent); halt = actually free it.
+  linux.show = () => { overlay.style.display = ''; setTimeout(focusShell, 60); };
+  linux.hide = () => { overlay.style.display = 'none'; };
+  const background = () => {
+    linux.hide();                                   // keep the kernel + onKey alive; just hide it
+    ctx.term.focus();
+    ctx.shell.out(c.gray('linux backgrounded — still running. ') + c.green('linux') + c.gray(' reopens it; ') + c.green('aiwass agent') + c.gray(' can run commands on it. (halt it in-panel to free memory.)'));
+    ctx.shell.prompt();
+  };
+  const halt = () => {
     clearInterval(statTimer);
     try { emulator && emulator.destroy && emulator.destroy(); } catch (_) {}
     overlay.remove();
     document.removeEventListener('keydown', onKey, true);
+    ctx.state.linux = null;
     ctx.term.focus();
     ctx.shell.out(c.green('kernel halted. the projection resumes.'));
     ctx.shell.prompt();
   };
+  linux.halt = halt;
   const onKey = (e) => {
-    if (e.ctrlKey && (e.key === ']' || e.code === 'BracketRight')) { e.preventDefault(); detach(); }
+    if (e.ctrlKey && (e.key === ']' || e.code === 'BracketRight')) { e.preventDefault(); background(); }
   };
   document.addEventListener('keydown', onKey, true);
-  overlay.querySelector('#vm-detach').addEventListener('click', detach);
-  ctx.state.vmDetach = detach;
+  overlay.querySelector('#vm-detach').addEventListener('click', background);
+  const haltBtn = overlay.querySelector('#vm-halt'); if (haltBtn) haltBtn.addEventListener('click', halt);
+  ctx.state.vmDetach = background;
   setState('booting', 'warn');
 
-  out(c.gray('kernel booting — watch the log; the shell opens when it settles. Ctrl-] to detach.'));
+  out(c.gray('kernel booting — watch the log; the shell opens when it settles. Ctrl-] to background (keeps it running).'));
 }
 
 function buildOverlay(manifest) {
@@ -180,8 +233,9 @@ function buildOverlay(manifest) {
       <span id="vm-state" class="vm-chip warn">booting</span>
       <span class="vm-grow"></span>
       <button id="vm-view" class="vm-toggle">view: boot log</button>
-      <span class="vm-hint">Ctrl-]</span>
-      <button id="vm-detach">detach ✕</button>
+      <span class="vm-hint">Ctrl-] background</span>
+      <button id="vm-detach">background ⇲</button>
+      <button id="vm-halt">halt ✕</button>
     </div>
     <div id="vm-stage">
       <aside id="vm-side">
@@ -218,6 +272,12 @@ function buildOverlay(manifest) {
   });
   obs.observe(el.querySelector('#vm-state'), { childList: true });
   return el;
+}
+
+// strip ANSI escapes and CRs from captured stdout (the sentinel capture
+// already stops before the next prompt, so there is none to remove)
+function cleanOut(s) {
+  return s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, '').trim();
 }
 
 function formatBig(n) {

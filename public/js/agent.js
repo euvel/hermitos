@@ -20,12 +20,16 @@ const SYSTEM = `You are AIWASS, an autonomous engineering assistant operating a 
 Answer the GOAL by taking iterative steps with tools, ReAct-style — be genuinely useful.
 
 Respond with ONE JSON object per turn, nothing else:
-{"thought":"brief","action":"python|sql|grep|read|final","input":"..."}
+{"thought":"brief","action":"python|shell|sql|grep|read|final","input":"..."}
 
 TOOLS (use the FEWEST that get the job done):
 - python : run real Python 3 (Pyodide). Use for ANY math, logic, proof, calculation,
            algorithm, simulation, or verification. print() the result. You may
            import numpy / sympy (auto-installed). This is your main reasoning tool.
+- shell  : run a real command on a REAL in-browser Linux kernel (v86) and read its
+           real output. Use for questions about THIS machine: kernel/OS, CPU, memory,
+           processes, uptime, the filesystem, or to actually run a coreutil.
+           Requires the user to have booted it first with the 'linux' command.
 - sql    : ONE read-only SQLite SELECT over the owner's résumé DB.
            projects(name,stack,year,impact,url) · experience(role,org,start_year,end_year,summary) · skills(area,name,level)
 - grep   : search the skill tree for a term — only for questions about the owner's skills.
@@ -34,8 +38,10 @@ TOOLS (use the FEWEST that get the job done):
 
 ROUTING:
 - Math / computation / proofs / "calculate X" → python (e.g. import sympy; print(sympy.simplify(...))).
+- About THIS machine / the Linux box / system state (kernel, cpu, memory, processes, files, uptime) → shell.
 - About the owner's skills / projects / experience → sql, then grep/read if useful.
 - General knowledge you already know confidently → answer directly with final. Do NOT grep for it.
+If shell reports the Linux box is not booted, tell the user to run 'linux' first — do not retry.
 Never grep vague phrases hoping for a hit. If two tool calls return nothing useful, switch tactic or finalize.
 Final answers: correct first, concise, no purple prose.`;
 
@@ -109,11 +115,29 @@ async function callPlanner(messages, ctx) {
 async function runTool(action, input, ctx) {
   try {
     if (action === 'python') return await toolPython(input, ctx);
+    if (action === 'shell') return await toolShell(input, ctx);
     if (action === 'sql') return await toolSql(input);
     if (action === 'grep') return toolGrep(input, ctx);
     if (action === 'read') return toolRead(input, ctx);
   } catch (e) { /* fall through */ }
   return { display: `unknown action '${action}'`, model: `error: unknown action ${action}` };
+}
+
+// real shell on the real v86 Linux kernel (visible in the pane the user booted)
+async function toolShell(cmd, ctx) {
+  const lx = ctx.state.linux;
+  if (!lx || !lx.ready) {
+    return {
+      display: 'linux not booted — the box must be running first',
+      model: 'The real Linux box is not booted. Tell the user to run the `linux` command to boot it, then ask again. Do NOT retry shell this turn.',
+    };
+  }
+  try { lx.show && lx.show(); } catch (_) {}          // surface the box so the command is watchable live
+  const res = await lx.exec(String(cmd || '').trim(), { timeout: 8000 });
+  const out = (res.stdout || '').trim();
+  if (res.timedout) return { display: `(timed out) ${out.slice(0, 90)}`, model: `command timed out after 8s. partial output:\n${out.slice(0, 800)}` };
+  const disp = out ? out.replace(/\n+/g, ' ⏎ ').slice(0, 120) : `(no output; exit ${res.code})`;
+  return { display: disp, model: (out || '(no output)').slice(0, 1200) + `\n[exit ${res.code}]` };
 }
 
 async function toolPython(code, ctx) {
@@ -172,8 +196,21 @@ function toolRead(path, ctx) {
 
 /* ── deterministic fallback planner (no LLM bound) ───────────────── */
 const MATHY = /[0-9]|prove|calcul|compute|factor|prime|integral|deriv|matrix|equation|solve|sum|sqrt|theorem|simplify|=|\+|\*|\^/i;
+const MACHINEY = /\bkernel\b|uname|\bos\b|\bcpu\b|processor|memory|\bram\b|\bmem\b|process(es)?\b|uptime|\/proc|\bmount\b|\bdisk\b|filesystem|this (machine|box|system|computer)/i;
 function heuristicStep(goal, ctx, step) {
   const g = goal.toLowerCase();
+  // about THIS machine → real shell on the booted Linux box
+  if (MACHINEY.test(goal) && ctx.state.linux && ctx.state.linux.ready) {
+    if (step === 1) {
+      const cmd = /kernel|uname|\bos\b/.test(g) ? 'uname -a'
+        : /cpu|processor/.test(g) ? 'head -20 /proc/cpuinfo'
+        : /memory|\bram\b|\bmem\b/.test(g) ? 'free -m 2>/dev/null || head /proc/meminfo'
+        : /uptime|load/.test(g) ? 'uptime; cat /proc/loadavg'
+        : /process/.test(g) ? 'ps' : 'uname -a; echo; free -m 2>/dev/null | head';
+      return { thought: 'querying the real kernel via shell.', action: 'shell', input: cmd };
+    }
+    return { thought: 'reporting what the box returned.', action: 'final', input: 'See the real kernel output above.' };
+  }
   // math/computation → Python
   if (MATHY.test(goal) && !/skill|project|experience|euvel|owner|résumé|resume|devops|kubernetes/i.test(goal)) {
     if (step === 1) return { thought: 'this is computational — solving it in Python.', action: 'python', input: pyFor(goal) };

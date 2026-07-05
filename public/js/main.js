@@ -89,31 +89,44 @@ function makeTerminal() {
   return { term, fit };
 }
 
-/* ── raw kernel stream (right pane when dissociated) ─────────────── */
+/* ── interior telemetry stream (right pane when dissociated) ──────
+   Real introspection of the running app: live event-bus traffic plus
+   sampled scheduler lag, render rate and JS heap. Nothing invented. */
 function startKernelStream() {
   const el = $('kernel-stream');
-  const head = $('kernel-pane');
-  const SNIP = [
-    () => `metric.degeneracy[${(Math.random()*8|0)}] = ${(Math.random()).toFixed(4)}  // inhomogeneous`,
-    () => `kam.torus.winding = ${(0.618+Math.random()*0.01).toFixed(6)}  (golden)`,
-    () => `trapping_set[${Math.random()*7|0}].occupancy = ${(80+Math.random()*20).toFixed(1)}%  escapes=0`,
-    () => `sheaf.glue() -> -ENOGLOBAL  (local sections consistent)`,
-    () => `π(interior=${(Math.random()).toFixed(6)}) = const`,
-    () => `turbulence.amplitude = ${(state.turbulence?0.7+Math.random()*0.3:Math.random()*0.05).toFixed(4)}`,
-    () => `observable.gradient = 0.000000  // clamped`,
-    () => `aiwass.emit(bytes=${(Math.random()*32|0)})  // bounded`,
-    () => `orbit.enter(Λ${Math.random()*7|0})  // no matching exit`,
-    () => `entropy.in = ∞   entropy.out = ε`,
-  ];
-  setInterval(() => {
+  const buf = [];
+  let fps = 0;
+  bus.on('fps', ({ fps: f }) => { fps = f; });
+
+  const push = (line) => {
     if (!state.dissociated) return;
-    const line = SNIP[Math.random()*SNIP.length|0]();
-    const ts = ((Date.now()-state.bootTime)/1000).toFixed(3);
-    el.textContent += `[${ts}] ${line}\n`;
-    const lines = el.textContent.split('\n');
-    if (lines.length > 60) el.textContent = lines.slice(-60).join('\n');
+    const ts = ((performance.now()) / 1000).toFixed(3);
+    buf.push(`[${ts}] ${line}`);
+    while (buf.length > 80) buf.shift();
+    el.textContent = buf.join('\n');
     el.scrollTop = el.scrollHeight;
-  }, 350);
+  };
+
+  const compact = (p) => {
+    if (p == null) return '';
+    if (typeof p !== 'object') return String(p);
+    return Object.entries(p).map(([k, v]) => `${k}=${typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(3)) : v}`).join(' ');
+  };
+
+  // real event-bus traffic — every emit the app makes, as it happens
+  bus.onAny((ev, p) => push(`bus.emit  ${ev}${p ? '  ' + compact(p) : ''}`));
+
+  // real periodic metrics: main-thread scheduler lag, render rate, heap, live state
+  let expected = performance.now() + 700;
+  setInterval(() => {
+    if (!state.dissociated) { expected = performance.now() + 700; return; }
+    const now = performance.now();
+    const lag = Math.max(0, now - expected); expected = now + 700;
+    const mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + 'MiB' : 'n/a';
+    push(`sched.lag=${lag.toFixed(1)}ms  render=${fps || '--'}fps  heap=${mem}`);
+    const ch = state.chaos;
+    push(`state  turbulence=${!!state.turbulence}  elevated=${!!state.elevated}  chaos=${ch && Date.now() < ch.until ? ch.kind : 'none'}`);
+  }, 700);
 }
 
 /* ── topbar / status wiring ──────────────────────────────────────── */
@@ -142,14 +155,19 @@ function wireStatus() {
     document.documentElement.style.setProperty('--led', on ? '#ff4d4d' : '');
   });
 
-  // animated load average (interior load, never observable=0)
+  // REAL main-thread load average: three EMAs of measured event-loop
+  // saturation (~3s/15s/60s constants). Rises when the render or a lab
+  // actually saturates the thread; ~0 at idle. Measured, never faked.
+  let l1 = 0, l5 = 0, l15 = 0; const SAMPLE = 250; let expect = performance.now() + SAMPLE;
   setInterval(() => {
-    if (state.turbulence) {
-      sLoad.textContent = `load ${(8+Math.random()*4).toFixed(2)} ${(6+Math.random()*3).toFixed(2)} ${(4+Math.random()).toFixed(2)}`;
-    } else {
-      sLoad.textContent = 'load 0.00 0.00 0.00';
-    }
-  }, 1200);
+    const now = performance.now();
+    const lag = Math.max(0, now - expect); expect = now + SAMPLE;
+    const inst = Math.min(4, lag / SAMPLE);                 // event-loop busy fraction
+    l1 += (SAMPLE / 3000) * (inst - l1);
+    l5 += (SAMPLE / 15000) * (inst - l5);
+    l15 += (SAMPLE / 60000) * (inst - l15);
+    sLoad.textContent = `load ${l1.toFixed(2)} ${l5.toFixed(2)} ${l15.toFixed(2)}`;
+  }, SAMPLE);
 
   // dissociate button + pane
   $('btn-dissociate').addEventListener('click', () => {
@@ -186,7 +204,8 @@ function welcome(shell) {
   shell.out(c.gray('  systems  ') + c.green('linux') + c.gray(' (real x86 linux) · ') + c.green('python3') + c.gray(' (real cpython) · ') + c.green('sql "…"'));
   shell.out(c.gray('  sre      ') + c.green('watch slo') + c.gray('  +  ') + c.green('chaos inject --model lorenz --rho 28') + c.gray('  ·  ') + c.green('chaos inject --ramp') + c.gray(' (tipping-point early warning)'));
   shell.out(c.gray('  cluster  ') + c.green('helm install demo webapp') + c.gray(' · ') + c.green('kubectl get pods -w') + c.gray('   (a real orchestrator; pods are real threads)'));
-  shell.out(c.gray('  labs     ') + c.green('train') + c.gray('   (a neural network learns, live — backprop from scratch)'));
+  shell.out(c.gray('  chaos    ') + c.green('lyapunov') + c.gray(' (Lorenz) · ') + c.green('kam') + c.gray(' (KAM tori, standard map) · ') + c.green('induce turbulence') + c.gray(' (measured λ)'));
+  shell.out(c.gray('  labs     ') + c.green('train') + c.gray(' (a neural net learns, live) · ') + c.green('sheaf') + c.gray(' + ') + c.green('glue') + c.gray(' (a real CRDT: diverge, then converge)'));
   shell.out(c.gray('  code     ') + c.green('source shell.js') + c.gray(' (this site\'s own source) · ') + c.green('git log') + c.gray(' · ') + c.green('edge'));
   shell.out('');
 }

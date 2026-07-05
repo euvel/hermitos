@@ -252,12 +252,14 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 #vm-bar .vm-note { color: var(--text-dim); }
 #vm-bar .vm-grow { flex: 1; }
 #vm-bar .vm-hint { color: var(--cyan); border: 1px solid rgba(79,214,204,.3); border-radius: 3px; padding: 1px 6px; }
-#vm-detach {
+#vm-detach, #vm-halt {
   font-family: var(--mono); font-size: 11px; cursor: pointer;
-  color: var(--red); background: transparent;
-  border: 1px solid rgba(255,93,93,.4); border-radius: 3px; padding: 3px 9px;
+  background: transparent; border-radius: 3px; padding: 3px 9px;
 }
-#vm-detach:hover { background: rgba(255,93,93,.12); }
+#vm-detach { color: var(--text-dim); border: 1px solid rgba(255,255,255,.18); }
+#vm-detach:hover { background: rgba(255,255,255,.08); color: var(--text); }
+#vm-halt { color: var(--red); border: 1px solid rgba(255,93,93,.4); }
+#vm-halt:hover { background: rgba(255,93,93,.12); }
 /* chips + toggle in the bar */
 .vm-chip {
   font-size: 10.5px; letter-spacing: .5px; padding: 2px 8px; border-radius: 3px;
@@ -472,6 +474,14 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 .ly-attwrap { flex: 1; min-height: 0; }
 #ly-att { width: 100%; height: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 0 60px rgba(79,214,204,.07); display: block; }
 @media (max-width: 720px) { #ly-grid { grid-template-columns: 1fr; grid-auto-rows: min-content; overflow-y: auto; } #ly-att { height: 52vh; } }
+
+/* KAM standard-map lab — reuses the .ly-* children, mirrors the ly layout */
+#km-overlay { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
+  background: radial-gradient(120% 80% at 80% 0%, #0a1018 0%, #05080e 55%, #02050a 100%); color: var(--text); font-size: 12px; animation: vmin .28s ease; }
+#km-top { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(8,12,18,.5); }
+#km-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px 1fr; gap: 14px; padding: 14px 18px 18px; }
+#km-att { width: 100%; height: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 0 60px rgba(79,214,204,.07); display: block; background: #02040a; }
+@media (max-width: 720px) { #km-grid { grid-template-columns: 1fr; grid-auto-rows: min-content; overflow-y: auto; } #km-att { height: 52vh; } }
 
 /* responsive */
 @media (max-width: 760px) {

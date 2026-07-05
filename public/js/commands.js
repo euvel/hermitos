@@ -17,6 +17,8 @@ import { dataCommands } from './data.js';
 import { edgeCommands, edgeLine } from './edge.js';
 import { nnCommands } from './nn.js';
 import { lorenzCommands } from './lorenz.js';
+import { kamCommands } from './kam.js';
+import { crdtCommands } from './crdt.js';
 import { vmCommands } from './vm.js';
 import { aiwassCommands } from './aiwass.js';
 import { kernelCommands } from './kernel.js';
@@ -56,7 +58,7 @@ const core = {
         'dev (real)': ['python3', 'source', 'git', 'sql'],
         'labs':       ['train'],
         'intelligence': ['aiwass'],
-        'systems':    ['linux', 'dissociate', 'induce', 'orbifold', 'metric', 'kam'],
+        'systems':    ['linux', 'dissociate', 'induce', 'orbifold', 'kam', 'sheaf', 'glue'],
         'devops':     ['chaos', 'lyapunov', 'watch', 'kubectl', 'helm'],
         'kernel':     ['kernel', 'sudo', 'su'],
         'misc':       ['echo', 'clear', 'history', 'man', 'neofetch', 'banner', 'cowsay', 'fortune', 'base64', 'sha256sum', 'exit'],
@@ -712,9 +714,10 @@ const MANPAGES = {
     '       ls cd cat grep find tree    navigate the projection',
     '       aiwass                       converse with the resident intelligence',
     '       chaos / kubectl / helm       perturb the orbifold (devops showcase)',
-    '       induce turbulence            simulate kernel panic (projection holds)',
-    '       dissociate                   split: clean resume | raw kernel',
-    '       glue / sheaf                 the path toward elevation',
+    '       induce turbulence            drive the interior across its bifurcation, measure λ',
+    '       dissociate                   split: clean resume | live interior telemetry',
+    '       kam / lyapunov               real chaos: standard map + Lorenz/Lyapunov',
+    '       sheaf / glue                 a real CRDT: diverge replicas, then glue them',
     '',
     c.cyan('SEE ALSO'),
     '       man sheaf, man orbifold, man aiwass, man chaos',
@@ -724,13 +727,18 @@ const MANPAGES = {
     c.amber('SHEAF(7)') + '                  HERMIT-OS Concepts                  ' + c.amber('SHEAF(7)'),
     '',
     c.cyan('NAME'),
-    '       sheaf — local sections that refuse to glue',
+    '       sheaf — a real CRDT: local sections that actually glue',
     '',
     c.cyan('DESCRIPTION'),
-    '       A sheaf assigns data to open sets and asks whether locally-',
-    '       consistent data glues into a global section. For Euvel it does',
-    '       not: every neighbourhood is honest; the whole admits no single',
-    '       consistent story. This is dissociation, formalized.',
+    '       A sheaf glues locally-consistent data over overlapping regions',
+    '       into one global section. The CS instance is a CRDT. `sheaf` is a',
+    '       real state-based Observed-Remove Set: replicas take divergent',
+    '       offline edits (`sheaf partition`), then `glue` joins them — and',
+    '       because the join is commutative, associative and idempotent, the',
+    '       result is order-independent. The gluing condition, made to hold.',
+    '',
+    '           ' + c.green('sheaf partition') + '   diverge the replicas concurrently',
+    '           ' + c.green('glue') + '              merge them into one global section',
     '',
     c.cyan('KERNEL ACCESS'),
     '       Kernel mode is the operator console, gated by a secret token that',
@@ -750,9 +758,9 @@ const MANPAGES = {
     '       background is a real GLSL realization: KAM tori, a degenerate',
     '       metric, fractal trapping boundaries, and singular cusps.',
     '',
-    '       Commands perturb it. ' + c.green('metric degenerate') + ', ' + c.green('kam perturb') + ', ',
-    '       ' + c.green('induce turbulence') + ', ' + c.green('chaos apply') + ' all change what you see,',
-    '       while the projection (this terminal) stays invariant.',
+    '       Real dynamical-systems tools measure and perturb it: ' + c.green('kam') + ' (standard map),',
+    '       ' + c.green('lyapunov') + ' (Lorenz), ' + c.green('induce turbulence') + ' (measured λ), ' + c.green('chaos inject') + ' —',
+    '       all change what you see, while the projection (this terminal) stays invariant.',
   ].join('\n'),
 
   aiwass: (c) => [
@@ -818,6 +826,8 @@ export function buildRegistry(ctx) {
   Object.assign(reg, edgeCommands(send));   // REAL Cloudflare edge awareness
   Object.assign(reg, nnCommands(send));     // live neural-net training lab
   Object.assign(reg, lorenzCommands(send));  // `lyapunov` — Lorenz attractor + Lyapunov
+  Object.assign(reg, kamCommands(send));     // `kam` — Chirikov standard map (real KAM tori)
+  Object.assign(reg, crdtCommands(send));    // `sheaf`/`glue` — real OR-Set CRDT
   Object.assign(reg, vmCommands(send));      // `linux` — real x86 kernel (v86)
   Object.assign(reg, aiwassCommands(send));
   Object.assign(reg, kernelCommands(send, core));

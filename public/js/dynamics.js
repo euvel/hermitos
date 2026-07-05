@@ -42,6 +42,27 @@ export function lorenzRK4(s, rho, h) {
   return s.map((v, i) => v + (h / 6) * (a[i] + 2 * b[i] + 2 * cc[i] + d[i]));
 }
 
+// Largest Lyapunov exponent of the Lorenz flow via Benettin's algorithm:
+// integrate a reference trajectory and a shadow started d0 away, measure
+// how fast they separate, renormalize each step, average the log-growth.
+// λ > 0 ⇒ sensitive dependence (chaos). At ρ=28, λ ≈ 0.9 per time-unit.
+export function benettinLorenz(rho, { dt = 0.005, time = 100, d0 = 1e-8, warmup = 6 } = {}) {
+  let s = [1, 1, 1], sp = [1 + d0, 1, 1];
+  for (let t = 0; t < warmup; t += dt) { s = lorenzRK4(s, rho, dt); }   // settle onto the attractor
+  sp = [s[0] + d0, s[1], s[2]];
+  let lsum = 0, elapsed = 0;
+  const steps = Math.round(time / dt);
+  for (let i = 0; i < steps; i++) {
+    s = lorenzRK4(s, rho, dt); sp = lorenzRK4(sp, rho, dt);
+    const d = Math.hypot(sp[0] - s[0], sp[1] - s[1], sp[2] - s[2]) || d0;
+    lsum += Math.log(d / d0);
+    const f = d0 / d;                                  // renormalize the shadow back to d0
+    sp = [s[0] + (sp[0] - s[0]) * f, s[1] + (sp[1] - s[1]) * f, s[2] + (sp[2] - s[2]) * f];
+    elapsed += dt;
+  }
+  return elapsed > 0 ? lsum / elapsed : 0;
+}
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 let _spare = null;
 function gauss() {                                   // standard normal (Box–Muller)
