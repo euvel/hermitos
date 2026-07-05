@@ -18,6 +18,11 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function guestSetupScript() {
   return [
     'mkdir -p /usr/local/bin /root/resume 2>/dev/null',
+    // silence the image's host9p auto-mount banner at the SOURCE so it never
+    // reappears on login (real mode is raw passthrough — can't line-filter it)
+    'for f in /etc/profile /root/.profile /root/.bashrc /etc/motd; do',
+    "  [ -f \"$f\" ] && sed -i -e '/host9p/d' -e '/appear in \\/mnt/d' \"$f\" 2>/dev/null",
+    'done',
     // guest → host control: `kernel switch imaginary|real` from inside real Linux
     "cat > /usr/local/bin/kernel <<'KEOF'",
     '#!/bin/sh',
@@ -41,6 +46,13 @@ function guestSetupScript() {
     'echo; cat /root/resume/summary.txt; echo',
     'REOF',
     'chmod +x /usr/local/bin/resume',
+    // persist branding + PATH + the switch helper across logins, so `exit`
+    // (getty re-login) lands in a branded shell where `kernel switch` still works
+    "grep -q hermit-complex /etc/profile 2>/dev/null || cat >> /etc/profile <<'PEOF'",
+    '# hermit-complex',
+    'export PATH=/usr/local/bin:$PATH',
+    "export PS1='hermit:\\w# '",
+    'PEOF',
     'export PATH=/usr/local/bin:$PATH',
     "export PS1='hermit:\\w# '",
   ].join('\n');
@@ -217,12 +229,17 @@ export function kernelCommands(send, core) {
           const lx = ctx.state.linux;
           if (!lx || !lx.ready) return send(c.gray('nothing to integrate yet — boot the real kernel first: ') + c.green('kernel boot real'), ctx, piped);
           if (lx.published) { ctx.shell.enterReal(); return ''; }
-          ctx.shell.out(c.amber('▸ integrating  ℝ + 𝑖  →  ℂ') + c.gray('   (installing the guest switch helper + mounting the résumé view)'));
-          lx.sendRaw(guestSetupScript() + '\n');
-          await sleep(1600);
+          ctx.shell.out(c.amber('▸ integrating  ℝ + 𝑖  →  ℂ') + c.gray('   (mounting the résumé view + switch helper into the real kernel)'));
+          ctx.shell.busy = true;
+          // run the guest setup silently (still in imaginary mode → output swallowed)
+          // and wait for it to actually finish before flipping to real mode, so
+          // the heredoc echo never leaks onto the screen.
+          if (lx.sendAndSettle) await lx.sendAndSettle(guestSetupScript());
+          else { lx.sendRaw(guestSetupScript() + '\n'); await sleep(1600); }
+          ctx.shell.busy = false;
           lx.published = true; ctx.state.published = true;
           ctx.bus.emit('orbifold:pulse', {});
-          ctx.shell.out(c.green('● integrated — the terminal is now complex.') + c.gray('  default = real Linux; ') + c.cyan('kernel switch imaginary') + c.gray(' for the résumé kernel.'));
+          ctx.shell.out(c.green('● integrated — the terminal is now complex.') + c.gray('  default = real Linux; ') + c.cyan('kernel switch imaginary') + c.gray(' (or Ctrl-]) for the résumé kernel.'));
           ctx.shell.enterReal();
           return '';
         }

@@ -97,9 +97,18 @@ export async function bootRealKernel(ctx, { onError } = {}) {
 
   // ── serial bridge ────────────────────────────────────────────────
   let cap = null, sbuf = '', swbuf = '', loggedIn = false, lineBuf = '';
+  let settleRe = null, settleCb = null, settleBuf = '';   // sendAndSettle: wait for a command batch to finish (echo-safe)
   const onByte = (byte) => {
     const ch = typeof byte === 'number' ? String.fromCharCode(byte) : String(byte);
     if (cap) { cap.buf += ch; cap.check(); }
+
+    // sendAndSettle: resolve when the batch's end-sentinel OUTPUT appears.
+    // `__HSET_x__:<digit>` exists only in the command's output, never in the
+    // echoed command line (which ends in `:$?`), so this never fires early.
+    if (settleRe) {
+      settleBuf = (settleBuf + ch).slice(-160);
+      if (settleRe.test(settleBuf)) { const cb = settleCb; settleRe = null; settleCb = null; settleBuf = ''; if (cb) cb(); }
+    }
 
     sbuf = (sbuf + ch).slice(-240);
     if (!loggedIn && /login:\s*$/i.test(sbuf)) { loggedIn = true; sbuf = ''; emulator.serial0_send((manifest.login || 'root') + '\n'); }
@@ -149,6 +158,21 @@ export async function bootRealKernel(ctx, { onError } = {}) {
     execChain = execChain.then(run, run);
     return execChain;
   };
+
+  // ── sendAndSettle: push a raw multi-line script (heredocs etc.) and resolve
+  // only once the guest has finished running it and returned to a prompt.
+  // Output is swallowed while display+bootStream are off (integrate runs it in
+  // imaginary mode), so the visitor never sees the setup echo. ──
+  linux.sendAndSettle = (script, { timeout = 8000 } = {}) => new Promise((resolve) => {
+    const id = Math.random().toString(36).slice(2, 8);
+    settleRe = new RegExp('__HSET_' + id + '__:\\d');
+    settleBuf = '';
+    let done = false;
+    const fin = () => { if (done) return; done = true; settleRe = null; settleCb = null; clearTimeout(tm); resolve(); };
+    settleCb = fin;
+    const tm = setTimeout(fin, timeout);
+    emulator.serial0_send(script + '\necho __HSET_' + id + '__:$?\n');
+  });
 
   linux.halt = () => { try { emulator.destroy && emulator.destroy(); } catch (_) {} vga.remove(); if (ctx.state.linux === linux) ctx.state.linux = null; };
   return linux;
