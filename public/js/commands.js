@@ -20,7 +20,6 @@ import { lorenzCommands } from './lorenz.js';
 import { kamCommands } from './kam.js';
 import { crdtCommands } from './crdt.js';
 import { ciCommands } from './ci.js';
-import { vmCommands } from './vm.js';
 import { aiwassCommands } from './aiwass.js';
 import { kernelCommands } from './kernel.js';
 
@@ -45,7 +44,7 @@ function realUnix(name, mapper, hint) {
     async run(args, ctx, piped) {
       const lx = ctx.state.linux;
       if (!lx || !lx.ready) {
-        return send(c.gray(`${name}: needs the real kernel. run `) + c.green('linux') + c.gray(' first (it can stay backgrounded), then re-run — this shows REAL output, not a mock.'), ctx, piped);
+        return send(c.gray(`${name}: needs the real kernel. run `) + c.green('kernel boot real') + c.gray(' first, then re-run — this shows REAL output, not a mock. (or run it directly in real mode: ') + c.green('kernel switch real') + c.gray(')'), ctx, piped);
       }
       const cmd = typeof mapper === 'function' ? mapper(args) : mapper;
       const r = await lx.exec(cmd, { timeout: 6000 });
@@ -83,7 +82,7 @@ const core = {
         'dev (real)': ['python3', 'source', 'git', 'sql', 'ci', 'deploy'],
         'labs':       ['train'],
         'intelligence': ['aiwass'],
-        'systems':    ['linux', 'dissociate', 'induce', 'orbifold', 'kam', 'sheaf', 'glue'],
+        'systems':    ['kernel', 'dissociate', 'induce', 'orbifold', 'kam', 'sheaf', 'glue'],
         'devops':     ['chaos', 'lyapunov', 'watch', 'kubectl', 'helm'],
         'kernel':     ['kernel', 'sudo', 'su'],
         'misc':       ['echo', 'clear', 'history', 'man', 'neofetch', 'banner', 'cowsay', 'fortune', 'base64', 'sha256sum', 'exit'],
@@ -382,7 +381,7 @@ const core = {
     run(args, ctx, piped) {
       return send([
         c.gray('this kernel boots with busybox init, not systemd — there are no units to manage.'),
-        c.gray('for the REAL running processes use ') + c.green('ps') + c.gray(', for mounts ') + c.green('mount') + c.gray(', for the kernel log ') + c.green('dmesg') + c.gray(' (all real once ') + c.green('linux') + c.gray(' is booted).'),
+        c.gray('for the REAL running processes use ') + c.green('ps') + c.gray(', for mounts ') + c.green('mount') + c.gray(', for the kernel log ') + c.green('dmesg') + c.gray(' (all real once ') + c.green('kernel boot real') + c.gray(').'),
       ].join('\n'), ctx, piped);
     },
   },
@@ -757,7 +756,6 @@ export function buildRegistry(ctx) {
   Object.assign(reg, kamCommands(send));     // `kam` — Chirikov standard map (real KAM tori)
   Object.assign(reg, crdtCommands(send));    // `sheaf`/`glue` — real OR-Set CRDT
   Object.assign(reg, ciCommands(send));      // `ci`/`deploy` — real GitHub Actions + CD status
-  Object.assign(reg, vmCommands(send));      // `linux` — real x86 kernel (v86)
   Object.assign(reg, aiwassCommands(send));
   Object.assign(reg, kernelCommands(send, core));
   return reg;

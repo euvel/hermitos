@@ -7,8 +7,44 @@
    =================================================================== */
 
 import { c } from './shell.js';
+import { bootRealKernel, noImageMessage } from './vm.js';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/* Script pushed into the real kernel on `kernel integrate`: installs a
+   guest-side `kernel switch` helper (signals the host via OSC 777 so the
+   "commands only" switch works from inside real Linux), mounts a résumé
+   view, and brands the shell. Sent raw (heredocs), so no capture framing. */
+function guestSetupScript() {
+  return [
+    'mkdir -p /usr/local/bin /root/resume 2>/dev/null',
+    // guest → host control: `kernel switch imaginary|real` from inside real Linux
+    "cat > /usr/local/bin/kernel <<'KEOF'",
+    '#!/bin/sh',
+    'case "$1 $2" in',
+    "\"switch imaginary\"|\"switch i\") printf '\\033]777;kernel;switch;imaginary\\007' ;;",
+    "\"switch real\"|\"switch r\") printf '\\033]777;kernel;switch;real\\007' ;;",
+    '*) echo "kernel: usage: kernel switch imaginary|real   (you are in REAL Linux — this jumps to the résumé kernel)" ;;',
+    'esac',
+    'KEOF',
+    'chmod +x /usr/local/bin/kernel',
+    // a résumé view reachable from inside real Linux (the full interactive one is the imaginary kernel)
+    "cat > /root/resume/summary.txt <<'SEOF'",
+    '  Euvel — DevOps / Systems / SRE.',
+    '  Real systems, not slideware: chaos engineering with dynamical-systems',
+    '  analysis, an in-browser orchestrator, edge SQL, a from-scratch neural net,',
+    '  a CRDT, and this real Linux kernel — all live on the résumé itself.',
+    '  Full interactive résumé (labs, aiwass, dynamical systems): kernel switch imaginary',
+    'SEOF',
+    "cat > /usr/local/bin/resume <<'REOF'",
+    '#!/bin/sh',
+    'echo; cat /root/resume/summary.txt; echo',
+    'REOF',
+    'chmod +x /usr/local/bin/resume',
+    'export PATH=/usr/local/bin:$PATH',
+    "export PS1='hermit:\\w# '",
+  ].join('\n');
+}
 
 const TABLES = {
   projects:   ['name', 'stack', 'year', 'impact', 'url'],
@@ -135,10 +171,74 @@ export function kernelCommands(send, core) {
     },
 
     kernel: {
-      desc: 'kernel-mode résumé dashboard (operator only)',
-      usage: 'kernel auth | ls | add <table> field=val… | edit <table> <id> field=val… | rm <table> <id> | lock',
+      desc: 'the complex terminal (real+imaginary) + operator dashboard',
+      usage: 'kernel status | boot real | integrate | switch imaginary|real   ·   auth | ls | add | edit | rm | lock',
       async run(args, ctx, piped) {
         const sub = args[0];
+
+        /* ── complex terminal: real (ℝ) + imaginary (𝑖) kernels ── */
+        if (!sub || sub === 'status' || (sub === 'boot' && (!args[1] || args[1] === 'status'))) {
+          const lx = ctx.state.linux;
+          const real = !lx ? c.gray('not booted') : !lx.ready ? c.amber('booting…') : lx.published ? c.green('integrated (ℂ)') : c.cyan('ready — run `kernel integrate`');
+          return send([
+            c.amber('kernel status') + c.gray('   z = real + imaginary·𝑖'),
+            c.gray('  imaginary (𝑖)  résumé + tools ....... ') + c.green('online') + c.gray('  (this shell)'),
+            c.gray('  real      (ℝ)  x86 Linux via v86 .... ') + real,
+            '',
+            (lx && lx.published)
+              ? c.gray('  switch:  ') + c.cyan('kernel switch real') + c.gray('  ·  ') + c.cyan('kernel switch imaginary')
+              : c.gray('  the full trip:  ') + c.cyan('kernel boot real') + c.gray('  →  ') + c.cyan('kernel integrate'),
+          ].join('\n'), ctx, piped);
+        }
+
+        if (sub === 'boot' && (args[1] === 'real' || args[1] === 'linux')) {
+          const cur = ctx.state.linux;
+          if (cur && cur.ready) return send(c.green('real kernel already booted.') + c.gray('  fuse them: ') + c.cyan('kernel integrate'), ctx, piped);
+          ctx.shell.out(c.amber('▸ booting the REAL x86 Linux kernel (v86) — streaming the genuine boot log…'));
+          ctx.shell.out(c.gray('  first boot fetches a few MB; ~15–30s. the imaginary kernel is unaffected either way.'));
+          ctx.shell.busy = true;
+          const lx = await bootRealKernel(ctx, {});
+          if (!lx) { ctx.shell.busy = false; ctx.shell.out(noImageMessage()); ctx.shell.prompt(); return ''; }
+          lx.attachDisplay(true);
+          ctx.term.write('\r\n');
+          const ok = await Promise.race([lx.whenReady.then(() => true), sleep(90000).then(() => false)]);
+          lx.attachDisplay(false);
+          ctx.shell.busy = false;
+          if (!ok) { ctx.shell.out('\r\n' + c.red('kernel: the real kernel did not reach a shell in time.')); ctx.shell.prompt(); return ''; }
+          ctx.shell.out('\r\n' + c.green('● real kernel ready.') + c.gray('  now fuse them into one terminal: ') + c.cyan('kernel integrate'));
+          ctx.shell.prompt();
+          return '';
+        }
+
+        if (sub === 'integrate' || sub === 'publish' || sub === 'merge') {
+          const lx = ctx.state.linux;
+          if (!lx || !lx.ready) return send(c.gray('nothing to integrate yet — boot the real kernel first: ') + c.green('kernel boot real'), ctx, piped);
+          if (lx.published) { ctx.shell.enterReal(); return ''; }
+          ctx.shell.out(c.amber('▸ integrating  ℝ + 𝑖  →  ℂ') + c.gray('   (installing the guest switch helper + mounting the résumé view)'));
+          lx.sendRaw(guestSetupScript() + '\n');
+          await sleep(1600);
+          lx.published = true; ctx.state.published = true;
+          ctx.bus.emit('orbifold:pulse', {});
+          ctx.shell.out(c.green('● integrated — the terminal is now complex.') + c.gray('  default = real Linux; ') + c.cyan('kernel switch imaginary') + c.gray(' for the résumé kernel.'));
+          ctx.shell.enterReal();
+          return '';
+        }
+
+        if (sub === 'switch') {
+          const to = (args[1] || '').toLowerCase();
+          if (['real', 'r', 'linux'].includes(to)) { ctx.shell.enterReal(); return ''; }
+          if (['imaginary', 'i', 'resume', 'résumé'].includes(to)) { ctx.shell.enterImaginary(); return ''; }
+          return send(c.gray('usage: kernel switch imaginary|real'), ctx, piped);
+        }
+
+        if (sub === 'halt') {
+          const lx = ctx.state.linux;
+          if (!lx) return send(c.gray('the real kernel is not running.'), ctx, piped);
+          if (lx.halt) lx.halt();
+          ctx.shell.mode = 'imaginary'; ctx.state.published = false;
+          ctx.bus.emit('mode', { mode: 'imaginary' });
+          return send(c.amber('real kernel halted; freed. imaginary kernel remains.'), ctx, piped);
+        }
 
         if (sub === 'auth' || sub === '--auth' || sub === 'login') return login(ctx, send, piped, args[1]);
 
@@ -153,7 +253,7 @@ export function kernelCommands(send, core) {
 
         if (!guard(ctx, send, piped)) return '';
 
-        if (!sub || sub === 'help') {
+        if (sub === 'help') {
           return send([
             c.green('KERNEL MODE') + c.gray(' — fs/resume (Cloudflare D1), writable. tables: ') + Object.keys(TABLES).map(t => c.cyan(t)).join(', '),
             '',

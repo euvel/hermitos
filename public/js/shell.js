@@ -34,6 +34,7 @@ export class Shell {
     this.history = [];
     this.histIdx = 0;
     this.busy = false;         // command running
+    this.mode = 'imaginary';   // 'imaginary' (résumé kernel) | 'real' (raw v86 Linux tty)
     this.liveMode = null;      // active full-screen live dashboard, if any
     this._liveTimer = null;
     this.env = {
@@ -62,6 +63,27 @@ export class Shell {
   prompt() {
     this.buf = ''; this.cursor = 0; this.histIdx = this.history.length;
     this.write('\r\n' + this.promptStr());
+  }
+
+  /* ── complex terminal: switch between the imaginary and real kernels ── */
+  enterReal() {
+    const lx = this.ctx.state.linux;
+    if (!lx || !lx.ready) { this.out(c.gray('real kernel is not booted — run ') + c.green('kernel boot real') + c.gray(' first.')); this.prompt(); return; }
+    this.mode = 'real';
+    this.buf = ''; this.cursor = 0;
+    if (lx.attachDisplay) lx.attachDisplay(true);   // serial output now streams to this terminal
+    this.ctx.bus.emit('mode', { mode: 'real' });
+    this.write('\r\n' + c.gray('— real Linux (ℝ). ') + c.green('kernel switch imaginary') + c.gray(' or Ctrl-] returns to the résumé kernel. —') + '\r\n');
+    if (lx.sendRaw) lx.sendRaw('\n');               // nudge a fresh guest prompt
+  }
+  enterImaginary() {
+    this.mode = 'imaginary';
+    const lx = this.ctx.state.linux;
+    if (lx && lx.attachDisplay) lx.attachDisplay(false);
+    this.ctx.bus.emit('mode', { mode: 'imaginary' });
+    this.out('');
+    this.out(c.gray('↩ imaginary kernel — résumé + tools (𝑖). ') + c.green('kernel switch real') + c.gray(' to return to Linux.'));
+    this.prompt();
   }
 
   redraw() {
@@ -235,6 +257,12 @@ export class Shell {
   onKey(data) {
     if (this.liveMode) { this.liveMode.onKey(data); return; } // live dashboard owns keys
     if (this.secretMode) { this.onSecretKey(data); return; }  // masked password entry
+    // ── REAL mode: raw passthrough to the real Linux tty (it echoes + line-edits) ──
+    if (this.mode === 'real' && this.ctx.state.linux && this.ctx.state.linux.sendRaw) {
+      if (data === '\x1d') { this.enterImaginary(); return; }   // Ctrl-] — emergency hatch back to the imaginary kernel
+      this.ctx.state.linux.sendRaw(data);
+      return;
+    }
     if (this.busy) return;             // ignore input while a command runs
     const code = data.charCodeAt(0);
 

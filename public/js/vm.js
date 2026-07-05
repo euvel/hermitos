@@ -1,28 +1,22 @@
 /* ===================================================================
-   hermit — `linux` : a real x86 Linux kernel in the browser via v86 (WASM).
-   `uname -a`, `unshare`, `strace`, mount — it all works; it's a real kernel.
+   hermit — the REAL kernel bridge (v86), headless.
 
-   The disk/state image is SELF-HOSTED: drop your files in /public/vm/
-   and describe them in /public/vm/manifest.json. See public/vm/README.md.
-   If no manifest is present, this degrades honestly.
+   No overlay. The real x86 Linux kernel's serial console is bridged
+   straight into the ONE main terminal, so hermit becomes a "complex"
+   terminal: an imaginary kernel (résumé + tools) and a real kernel
+   (Linux), switchable in place — z = a + b·i.
+
+   This module boots v86 headless and exposes a bridge on ctx.state.linux:
+     · sendRaw(data)      forward raw keystrokes to the guest tty
+     · attachDisplay(on)  stream the guest's serial output to the terminal
+     · exec(cmd)          run a command and capture stdout (sentinel-framed)
+     · ready              true once the shell prompt appears
+   A guest→host control sentinel (OSC 777) lets `kernel switch …` run from
+   inside real Linux and flip the host's mode. Nothing is mocked; if no
+   image is installed it degrades honestly.
    =================================================================== */
 
 import { c } from './shell.js';
-
-export function vmCommands(send) {
-  const run = {
-    desc: 'boot a real x86 Linux kernel (v86) in the browser',
-    usage: 'linux',
-    async run(args, ctx, piped) {
-      // if a kernel is already running (backgrounded), just reopen it
-      if (ctx.state.linux && ctx.state.linux.show) { ctx.state.linux.show(); return ''; }
-      await bootRealLinux(ctx);
-      return '';
-    },
-  };
-  // `linux` is the canonical name; `vm` and `boot` are aliases
-  return { linux: run, vm: { ...run, desc: 'alias: linux' }, boot: { ...run, desc: 'alias: linux' } };
-}
 
 const LIBV86 = 'https://cdn.jsdelivr.net/npm/v86@0.5.228/build/libv86.js';
 const DEFAULTS = {
@@ -41,50 +35,43 @@ function loadScript(src) {
   });
 }
 
-export async function bootRealLinux(ctx) {
-  const out = (s) => ctx.shell.out(s);
+// strip ANSI + CRs from captured stdout (sentinel capture already stops before the prompt)
+function cleanOut(s) { return s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, '').trim(); }
 
-  // 1. self-hosted manifest
+const SWITCH_RE = /\x1b\]777;kernel;switch;(imaginary|real)\x07/;   // guest→host control
+
+// Boot the real kernel headless and wire the serial bridge onto ctx.state.linux.
+// Returns the bridge (with a `whenReady` promise) or null on failure.
+export async function bootRealKernel(ctx, { onError } = {}) {
+  if (ctx.state.linux && ctx.state.linux.ready) return ctx.state.linux;   // already up
+
   let manifest;
   try {
     const r = await fetch('/vm/manifest.json', { cache: 'no-store' });
     if (!r.ok) throw new Error('no manifest');
     manifest = await r.json();
-  } catch (_) {
-    out(instructions());
-    return;
-  }
+  } catch (_) { onError && onError('no-image'); return null; }
 
-  out(c.gray('boot: real-Linux manifest found. loading v86 (x86 emulator, WASM) …'));
-  try {
-    if (!window.V86 && !window.V86Starter) await loadScript(manifest.libv86 || LIBV86);
-  } catch (e) {
-    out(c.red('boot: could not load the v86 emulator (offline?). the real kernel needs the v86 runtime.'));
-    return;
-  }
+  try { if (!window.V86 && !window.V86Starter) await loadScript(manifest.libv86 || LIBV86); }
+  catch (_) { onError && onError('offline'); return null; }
   const V86 = window.V86 || window.V86Starter;
-  if (!V86) { out(c.red('boot: v86 runtime global not found.')); return; }
+  if (!V86) { onError && onError('no-runtime'); return null; }
 
-  // 2. full-screen console: the serial terminal is the star; a sidebar gives a
-  //    professional MOTD, live status, and one-click real commands.
-  const overlay = buildOverlay(manifest);
+  // hidden VGA container (v86 wants a screen; the serial console is what we use)
+  const vga = document.createElement('div');
+  vga.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:640px;height:480px;opacity:0;pointer-events:none;';
+  vga.innerHTML = '<div style="white-space:pre;font:14px monospace"></div><canvas></canvas>';
+  document.body.appendChild(vga);
 
-  // 3. assemble v86 options from the manifest. We render the serial console only
-  //    (the VGA framebuffer is headless here); set manifest.show_vga to surface it.
   const opt = {
     wasm_path: manifest.wasm_path || DEFAULTS.wasm_path,
     memory_size: manifest.memory_size || DEFAULTS.memory_size,
     vga_memory_size: manifest.vga_memory_size || DEFAULTS.vga_memory_size,
-    autostart: true,
-    disable_mouse: true,
-    screen_container: overlay.querySelector('#vm-screen'),        // VGA boot logs
-    serial_container_xtermjs: overlay.querySelector('#vm-serial'), // interactive shell
+    autostart: true, disable_mouse: true, screen_container: vga,
   };
   if (manifest.bios !== null) opt.bios = { url: manifest.bios || DEFAULTS.bios };
   if (manifest.vga_bios !== null) opt.vga_bios = { url: manifest.vga_bios || DEFAULTS.vga_bios };
-  for (const k of ['cdrom', 'hda', 'hdb', 'fda']) {
-    if (manifest[k]) opt[k] = typeof manifest[k] === 'string' ? { url: manifest[k] } : manifest[k];
-  }
+  for (const k of ['cdrom', 'hda', 'hdb', 'fda']) if (manifest[k]) opt[k] = typeof manifest[k] === 'string' ? { url: manifest[k] } : manifest[k];
   if (manifest.bzimage) opt.bzimage = { url: manifest.bzimage };
   if (manifest.initrd) opt.initrd = { url: manifest.initrd };
   if (manifest.initial_state) opt.initial_state = { url: manifest.initial_state };
@@ -93,75 +80,45 @@ export async function bootRealLinux(ctx) {
   if (manifest.cmdline) opt.cmdline = manifest.cmdline;
 
   let emulator;
-  try { emulator = new V86(opt); }
-  catch (e) { out(c.red('boot: v86 init failed: ' + e)); overlay.remove(); return; }
+  try { emulator = new V86(opt); } catch (e) { onError && onError('init'); vga.remove(); return null; }
 
-  // ── live status, statistics, boot→shell transition ───────────────
-  const pane = overlay.querySelector('#vm-pane');
-  const stateEl = overlay.querySelector('#vm-state');
-  const setState = (txt, cls) => { stateEl.textContent = txt; stateEl.className = 'vm-chip ' + (cls || ''); };
-  const focusShell = () => {
-    const s = overlay.querySelector('#vm-serial .xterm-helper-textarea');
-    s && s.focus && s.focus();
+  let resolveReady;
+  const linux = {
+    emulator, ready: false, display: false, published: false,
+    whenReady: new Promise((res) => { resolveReady = res; }),
+    sendRaw: (d) => { try { emulator.serial0_send(d); } catch (_) {} },
+    attachDisplay: (on) => { linux.display = !!on; },
+    exec: null, halt: null,
   };
-  const showShell = () => { pane.classList.add('show-shell'); viewBtn.textContent = 'view: shell'; focusShell(); };
-  const showBoot  = () => { pane.classList.remove('show-shell'); viewBtn.textContent = 'view: boot log'; };
-
-  const viewBtn = overlay.querySelector('#vm-view');
-  viewBtn.addEventListener('click', () => pane.classList.contains('show-shell') ? showBoot() : showShell());
-
-  // statistics: uptime, instructions retired, emulated speed (MIPS)
-  const t0 = Date.now();
-  const counter = () => { try { return emulator.get_instruction_counter() >>> 0; } catch (_) { return null; } };
-  let lastC = counter(), lastT = performance.now();
-  const setStat = (id, v) => { const e = overlay.querySelector('#vm-' + id); if (e) e.textContent = v; };
-  const statTimer = setInterval(() => {
-    const s = Math.floor((Date.now() - t0) / 1000);
-    setStat('uptime', `${String((s / 60) | 0).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`);
-    const cNow = counter(), tNow = performance.now();
-    if (cNow != null && lastC != null) {
-      const dC = (cNow - lastC + 0x100000000) % 0x100000000;     // unsigned wrap
-      const mips = (dC / ((tNow - lastT) / 1000)) / 1e6;
-      if (isFinite(mips)) setStat('mips', mips.toFixed(1) + ' MIPS');
-      setStat('insn', formatBig(cNow));
-    }
-    lastC = cNow; lastT = tNow;
-  }, 1000);
-
-  // a handle other subsystems (the AIWASS agent) can drive — a real shell
-  // on a real kernel. Populated once, cleared on detach.
-  const linux = { emulator, ready: false, exec: null };
   ctx.state.linux = linux;
 
-  // watch the real serial stream: boot → prompt, optional auto-login
-  let started = false, sbuf = '', cap = null;
+  // ── serial bridge ────────────────────────────────────────────────
+  let cap = null, sbuf = '', swbuf = '', loggedIn = false;
   const onByte = (byte) => {
     const ch = typeof byte === 'number' ? String.fromCharCode(byte) : String(byte);
-    sbuf = (sbuf + ch).slice(-200);
     if (cap) { cap.buf += ch; cap.check(); }
-    if (!started) { started = true; setState('booting', 'warn'); }
-    if (/login:\s*$/i.test(sbuf)) { sbuf = ''; emulator.serial0_send('root\n'); }
-    else if (!linux.ready && /[#$%>]\s$/.test(sbuf)) {
-      linux.ready = true; setState('shell ready', 'ok');
-      setTimeout(showShell, 400);   // let the last boot lines settle, then reveal the shell
-    }
+
+    sbuf = (sbuf + ch).slice(-240);
+    if (!loggedIn && /login:\s*$/i.test(sbuf)) { loggedIn = true; sbuf = ''; emulator.serial0_send((manifest.login || 'root') + '\n'); }
+    else if (!linux.ready && /[#$]\s$/.test(sbuf)) { linux.ready = true; resolveReady(linux); }
+
+    // guest→host control (kernel switch typed inside real Linux)
+    swbuf = (swbuf + ch).slice(-40);
+    const m = swbuf.match(SWITCH_RE);
+    if (m) { swbuf = ''; if (m[1] === 'imaginary') ctx.shell.enterImaginary(); else ctx.shell.enterReal(); return; }
+
+    if (linux.display) ctx.term.write(ch);
   };
   try { emulator.add_listener('serial0-output-byte', onByte); } catch (_) {}
 
-  // ── programmatic exec over the serial line ───────────────────────
-  // Sentinel-framed so capture is unambiguous even with the shell's echo
-  // ON (so the command is VISIBLE in the pane): the boundary markers are
-  // matched only on their OUTPUT form (start followed by a newline; end
-  // followed by digits), which the echoed input line never satisfies.
-  // Commands are queued (one at a time on the single serial line).
+  // ── exec: run a command, capture stdout (sentinel-framed, echo-safe) ──
   let execChain = Promise.resolve(), execSeq = 0;
   linux.exec = (cmd, { timeout = 7000 } = {}) => {
     const run = () => new Promise((resolve) => {
       if (!linux.ready) { resolve({ stdout: '', code: null, error: 'shell not ready' }); return; }
       const id = (++execSeq).toString(36) + Math.random().toString(36).slice(2, 6);
       const HB = `__HB_${id}__`, HE = `__HE_${id}__`;
-      const startRe = new RegExp(HB + '\\r?\\n');
-      const endRe = new RegExp(HE + ':(\\d+)');
+      const startRe = new RegExp(HB + '\\r?\\n'), endRe = new RegExp(HE + ':(\\d+)');
       let done = false;
       const finish = (res) => { if (done) return; done = true; clearTimeout(tm); cap = null; resolve(res); };
       const tm = setTimeout(() => finish({ stdout: cap ? cleanOut(cap.buf) : '', code: null, timedout: true }), timeout);
@@ -180,124 +137,19 @@ export async function bootRealLinux(ctx) {
     return execChain;
   };
 
-  // background = keep the kernel running but hidden (so you can drive it
-  // from the main terminal / the AIWASS agent); halt = actually free it.
-  linux.show = () => { overlay.style.display = ''; setTimeout(focusShell, 60); };
-  linux.hide = () => { overlay.style.display = 'none'; };
-  const background = () => {
-    linux.hide();                                   // keep the kernel + onKey alive; just hide it
-    ctx.term.focus();
-    ctx.shell.out(c.gray('linux backgrounded — still running. ') + c.green('linux') + c.gray(' reopens it; ') + c.green('aiwass agent') + c.gray(' can run commands on it. (halt it in-panel to free memory.)'));
-    ctx.shell.prompt();
-  };
-  const halt = () => {
-    clearInterval(statTimer);
-    try { emulator && emulator.destroy && emulator.destroy(); } catch (_) {}
-    overlay.remove();
-    document.removeEventListener('keydown', onKey, true);
-    ctx.state.linux = null;
-    ctx.term.focus();
-    ctx.shell.out(c.green('kernel halted. the projection resumes.'));
-    ctx.shell.prompt();
-  };
-  linux.halt = halt;
-  const onKey = (e) => {
-    if (e.ctrlKey && (e.key === ']' || e.code === 'BracketRight')) { e.preventDefault(); background(); }
-  };
-  document.addEventListener('keydown', onKey, true);
-  overlay.querySelector('#vm-detach').addEventListener('click', background);
-  const haltBtn = overlay.querySelector('#vm-halt'); if (haltBtn) haltBtn.addEventListener('click', halt);
-  ctx.state.vmDetach = background;
-  setState('booting', 'warn');
-
-  out(c.gray('kernel booting — watch the log; the shell opens when it settles. Ctrl-] to background (keeps it running).'));
+  linux.halt = () => { try { emulator.destroy && emulator.destroy(); } catch (_) {} vga.remove(); if (ctx.state.linux === linux) ctx.state.linux = null; };
+  return linux;
 }
 
-function buildOverlay(manifest) {
-  const mem = Math.round((manifest.memory_size || DEFAULTS.memory_size) / (1024 * 1024));
-  const img = manifest.cdrom || manifest.bzimage || manifest.initial_state || 'image';
-  const imgName = String(img).split('/').pop();
-
-  // abstract nudges toward interesting territory — no claims, just invitations
-  const TRY = [
-    'uname -a', 'cat /proc/cpuinfo', 'cat /proc/meminfo', 'ls /proc',
-    'unshare -U -r whoami', 'mount', 'top', 'cat /proc/1/status',
-  ];
-
-  const el = document.createElement('div');
-  el.id = 'vm-overlay';
-  el.innerHTML = `
-    <div id="vm-bar">
-      <span class="vm-led"></span>
-      <span class="vm-title">HERMIT-OS&nbsp;&nbsp;·&nbsp;&nbsp;kernel</span>
-      <span id="vm-state" class="vm-chip warn">booting</span>
-      <span class="vm-grow"></span>
-      <button id="vm-view" class="vm-toggle">view: boot log</button>
-      <span class="vm-hint">Ctrl-] background</span>
-      <button id="vm-detach">background ⇲</button>
-      <button id="vm-halt">halt ✕</button>
-    </div>
-    <div id="vm-stage">
-      <aside id="vm-side">
-        <div class="vm-side-h">kernel statistics</div>
-        <div class="vm-stats">
-          <div><span>state</span><b id="vm-statetxt">—</b></div>
-          <div><span>uptime</span><b id="vm-uptime">00:00</b></div>
-          <div><span>instructions</span><b id="vm-insn">—</b></div>
-          <div><span>emulated speed</span><b id="vm-mips">—</b></div>
-          <div><span>arch</span><b>i686 (32-bit)</b></div>
-          <div><span>memory</span><b>${mem} MiB</b></div>
-          <div><span>image</span><b title="${imgName}">${imgName}</b></div>
-        </div>
-        <div class="vm-side-h">things to try, once the shell opens</div>
-        <ul class="vm-try">
-          ${TRY.map(cmd => `<li><code>${cmd}</code></li>`).join('')}
-        </ul>
-        <div class="vm-tip vm-dim">click the console to type · <code>Ctrl-]</code> or “detach” to return.</div>
-      </aside>
-      <main id="vm-pane" class="vm-pane">
-        <div class="vm-conlabel"><span class="vm-lbl-boot">boot log · kernel console</span><span class="vm-lbl-shell">shell · ttyS0</span></div>
-        <div id="vm-serial"></div>
-        <div id="vm-boot">
-          <div id="vm-screen"><div class="vm-text"></div><canvas class="vm-canvas"></canvas></div>
-          <div class="vm-booting"><span class="vm-spin"></span> bringing the kernel up…</div>
-        </div>
-      </main>
-    </div>`;
-  document.body.appendChild(el);
-  // mirror the state chip text into the stats panel
-  const obs = new MutationObserver(() => {
-    const s = el.querySelector('#vm-state'); const t = el.querySelector('#vm-statetxt');
-    if (s && t) t.textContent = s.textContent.replace(/^[●\s]+/, '');
-  });
-  obs.observe(el.querySelector('#vm-state'), { childList: true });
-  return el;
-}
-
-// strip ANSI escapes and CRs from captured stdout (the sentinel capture
-// already stops before the next prompt, so there is none to remove)
-function cleanOut(s) {
-  return s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, '').trim();
-}
-
-function formatBig(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + ' M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' K';
-  return String(n);
-}
-
-function instructions() {
+// honest guidance when no image is installed
+export function noImageMessage() {
   return [
-    c.amber('boot: no real-Linux image installed yet.') + c.gray('  HERMIT-OS will not fake a kernel.'),
+    c.amber('kernel boot real: no real-Linux image installed yet.') + c.gray('  hermit will not fake a kernel.'),
     '',
-    c.gray('  `linux` runs a GENUINE x86 Linux kernel in the browser via v86.'),
-    c.gray('  To enable it, self-host a small image (a few MB) and a manifest:'),
-    '',
+    c.gray('  the real kernel is a GENUINE x86 Linux booted in the browser via v86.'),
+    c.gray('  to enable it, self-host a small image + manifest:'),
     c.gray('   1. put a v86-compatible image in ') + c.cyan('public/vm/') + c.gray('  (ISO, bzImage+initrd, or a saved state)'),
-    c.gray('   2. create ') + c.cyan('public/vm/manifest.json') + c.gray('  — see ') + c.cyan('public/vm/README.md') + c.gray(' for ready-to-copy examples'),
-    c.gray('   3. redeploy. `linux` will then boot it full-screen.'),
-    '',
-    c.gray('  See public/vm/README.md to add an image.'),
+    c.gray('   2. create ') + c.cyan('public/vm/manifest.json') + c.gray('  (see ') + c.cyan('public/vm/README.md') + c.gray(')'),
+    c.gray('   3. redeploy. the imaginary kernel (résumé + tools) works regardless.'),
   ].join('\n');
 }

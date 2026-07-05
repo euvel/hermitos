@@ -26,14 +26,15 @@ const state = {
 /* ── boot splash ─────────────────────────────────────────────────── */
 const BOOT_LINES = [
   ['', 0],
-  ['<span class="ok">hermit</span>  ·  interactive systems terminal  ·  booting', 40],
+  ['<span class="ok">hermit</span>  ·  booting the <span class="ok">imaginary kernel</span>  ·  (𝑖) résumé + tools', 40],
   ['[<span class="ok">  OK  </span>] Mounted virtual filesystem', 80],
   ['[<span class="ok">  OK  </span>] Initialized WebGL field renderer', 80],
   ['[<span class="ok">  OK  </span>] Loaded shell — pipes · history · completion', 80],
   ['[<span class="ok">  OK  </span>] Registered command set', 70],
   ['[<span class="ok">  OK  </span>] Probed edge API', 80],
-  ['[<span class="ok">  OK  </span>] Subsystems: python (wasm) · sql (d1) · linux (v86) · neural lab', 110],
-  ['[<span class="ok">  OK  </span>] Reached target <span class="ok">Ready</span>', 110],
+  ['[<span class="ok">  OK  </span>] Subsystems: python (wasm) · sql (d1) · neural lab · dynamical systems', 110],
+  ['[<span class="dim">....</span>] Real kernel (ℝ, x86 Linux) available — <span class="dim">kernel boot real</span>', 90],
+  ['[<span class="ok">  OK  </span>] Reached target <span class="ok">Imaginary Ready</span>', 110],
   ['', 60],
   ['<span class="dim">ready. type `help` to begin.</span>', 200],
 ];
@@ -139,6 +140,12 @@ function wireStatus() {
 
   bus.on('fps', ({ fps }) => { fpsEl.textContent = fps + ' fps'; });
 
+  // complex-terminal mode indicator (ℝ real Linux · 𝑖 imaginary résumé kernel)
+  bus.on('mode', ({ mode }) => {
+    sInfo.textContent = mode === 'real' ? 'mode: ℝ real linux' : (state.published ? 'mode: 𝑖 imaginary (ℂ)' : 'mode: 𝑖 imaginary');
+    sInfo.style.color = mode === 'real' ? '#4fd6cc' : '';
+  });
+
   // show the real Cloudflare PoP serving this request, once known
   fetch('/api/whereami').then(r => r.ok ? r.json() : null).then(d => {
     if (d && d.edge && d.colo && !state.elevated) sInfo.textContent = `edge: ${d.colo}`;
@@ -199,9 +206,11 @@ function welcome(shell) {
   shell.out(c.amber('  ╩ ╩╚═╝╩╚═╩ ╩╩ ╩ '));
   shell.out('');
   shell.out(c.gray('  a real shell with real tools — nothing here is a slideshow. try things.'));
+  shell.out(c.gray('  this is the ') + c.cyan('imaginary kernel (𝑖)') + c.gray(' — résumé + tools. a whole ') + c.cyan('real Linux (ℝ)') + c.gray(' is one command away:'));
+  shell.out(c.gray('           ') + c.green('kernel boot real') + c.gray(' → ') + c.green('kernel integrate') + c.gray('  fuses them into one ') + c.cyan('complex terminal (ℂ = ℝ + 𝑖)') + c.gray('.'));
   shell.out('');
-  shell.out(c.gray('  start    ') + c.green('help') + c.gray(' · ') + c.green('ls /skills') + c.gray(' · ') + c.green('whoami'));
-  shell.out(c.gray('  systems  ') + c.green('linux') + c.gray(' (real x86 linux) · ') + c.green('python3') + c.gray(' (real cpython) · ') + c.green('sql "…"'));
+  shell.out(c.gray('  start    ') + c.green('help') + c.gray(' · ') + c.green('ls /skills') + c.gray(' · ') + c.green('whoami') + c.gray(' · ') + c.green('kernel status'));
+  shell.out(c.gray('  systems  ') + c.green('kernel boot real') + c.gray(' (real x86 linux) · ') + c.green('python3') + c.gray(' (real cpython) · ') + c.green('sql "…"'));
   shell.out(c.gray('  sre      ') + c.green('watch slo') + c.gray('  +  ') + c.green('chaos inject --model lorenz --rho 28') + c.gray('  ·  ') + c.green('chaos inject --ramp') + c.gray(' (tipping-point early warning)'));
   shell.out(c.gray('  cluster  ') + c.green('helm install demo webapp') + c.gray(' · ') + c.green('kubectl get pods -w') + c.gray('   (a real orchestrator; pods are real threads)'));
   shell.out(c.gray('  chaos    ') + c.green('lyapunov') + c.gray(' (Lorenz) · ') + c.green('kam') + c.gray(' (KAM tori, standard map) · ') + c.green('induce turbulence') + c.gray(' (measured λ)'));

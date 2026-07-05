@@ -29,7 +29,7 @@ TOOLS (use the FEWEST that get the job done):
 - shell  : run a real command on a REAL in-browser Linux kernel (v86) and read its
            real output. Use for questions about THIS machine: kernel/OS, CPU, memory,
            processes, uptime, the filesystem, or to actually run a coreutil.
-           Requires the user to have booted it first with the 'linux' command.
+           Requires the user to have booted it first with 'kernel boot real'.
 - sql    : ONE read-only SQLite SELECT over the owner's résumé DB.
            projects(name,stack,year,impact,url) · experience(role,org,start_year,end_year,summary) · skills(area,name,level)
 - grep   : search the skill tree for a term — only for questions about the owner's skills.
@@ -41,7 +41,7 @@ ROUTING:
 - About THIS machine / the Linux box / system state (kernel, cpu, memory, processes, files, uptime) → shell.
 - About the owner's skills / projects / experience → sql, then grep/read if useful.
 - General knowledge you already know confidently → answer directly with final. Do NOT grep for it.
-If shell reports the Linux box is not booted, tell the user to run 'linux' first — do not retry.
+If shell reports the Linux kernel is not booted, tell the user to run 'kernel boot real' first — do not retry.
 Never grep vague phrases hoping for a hit. If two tool calls return nothing useful, switch tactic or finalize.
 Final answers: correct first, concise, no purple prose.`;
 
@@ -128,11 +128,10 @@ async function toolShell(cmd, ctx) {
   const lx = ctx.state.linux;
   if (!lx || !lx.ready) {
     return {
-      display: 'linux not booted — the box must be running first',
-      model: 'The real Linux box is not booted. Tell the user to run the `linux` command to boot it, then ask again. Do NOT retry shell this turn.',
+      display: 'real kernel not booted — boot it first',
+      model: 'The real Linux kernel is not booted. Tell the user to run `kernel boot real` to boot it, then ask again. Do NOT retry shell this turn.',
     };
   }
-  try { lx.show && lx.show(); } catch (_) {}          // surface the box so the command is watchable live
   const res = await lx.exec(String(cmd || '').trim(), { timeout: 8000 });
   const out = (res.stdout || '').trim();
   if (res.timedout) return { display: `(timed out) ${out.slice(0, 90)}`, model: `command timed out after 8s. partial output:\n${out.slice(0, 800)}` };
