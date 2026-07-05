@@ -19,6 +19,7 @@ import { nnCommands } from './nn.js';
 import { lorenzCommands } from './lorenz.js';
 import { kamCommands } from './kam.js';
 import { crdtCommands } from './crdt.js';
+import { ciCommands } from './ci.js';
 import { vmCommands } from './vm.js';
 import { aiwassCommands } from './aiwass.js';
 import { kernelCommands } from './kernel.js';
@@ -32,6 +33,30 @@ function send(text, ctx, piped) {
 
 function absPath(ctx, p) { return normalize(ctx.shell.cwd, p); }
 function lines(s) { return (s ?? '').split('\n'); }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/* ── real coreutils: run on the REAL v86 kernel when it's booted ──────
+   No fabricated process tables. `mapper(args)` builds the real command
+   (with /proc fallbacks so it works on any busybox image). If the kernel
+   isn't up, we say so honestly and point at `linux` — we do not fake it. */
+function realUnix(name, mapper, hint) {
+  return {
+    desc: (hint || name) + ' (real kernel via v86)',
+    async run(args, ctx, piped) {
+      const lx = ctx.state.linux;
+      if (!lx || !lx.ready) {
+        return send(c.gray(`${name}: needs the real kernel. run `) + c.green('linux') + c.gray(' first (it can stay backgrounded), then re-run — this shows REAL output, not a mock.'), ctx, piped);
+      }
+      const cmd = typeof mapper === 'function' ? mapper(args) : mapper;
+      const r = await lx.exec(cmd, { timeout: 6000 });
+      const out = (r.stdout || '').trim();
+      if (!out) return send(c.gray(`(${name}: no output` + (r.code ? `, exit ${r.code}` : '') + ')'), ctx, piped);
+      return send(out, ctx, piped);
+    },
+  };
+}
+// quote a user arg for safe-ish inclusion in the guest command
+const q = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
 
 function fmtMode(node) {
   return node.mode || (node.type === 'dir' ? 'dr-xr-xr-x' : '-r--r--r--');
@@ -52,10 +77,10 @@ const core = {
       const reg = ctx.shell.registry;
       const groups = {
         'filesystem': ['ls', 'cd', 'pwd', 'cat', 'tree', 'find', 'grep', 'head', 'tail', 'wc', 'stat', 'file', 'du'],
-        'system':     ['whoami', 'id', 'uname', 'uptime', 'top', 'ps', 'free', 'env', 'date', 'dmesg', 'journalctl', 'strace', 'lsof', 'systemctl', 'kill'],
-        'trace/perf': ['bpftrace', 'perf', 'ltrace', 'vmstat', 'lscpu'],
+        'system':     ['whoami', 'id', 'uname', 'uptime', 'top', 'ps', 'free', 'mount', 'df', 'env', 'date', 'dmesg', 'journalctl', 'strace', 'lsof', 'kill'],
+        'trace/perf': ['bpftrace', 'perf', 'vmstat', 'lscpu'],
         'network':    ['ip', 'ping', 'ss', 'curl', 'dig', 'traceroute', 'edge'],
-        'dev (real)': ['python3', 'source', 'git', 'sql'],
+        'dev (real)': ['python3', 'source', 'git', 'sql', 'ci', 'deploy'],
         'labs':       ['train'],
         'intelligence': ['aiwass'],
         'systems':    ['linux', 'dissociate', 'induce', 'orbifold', 'kam', 'sheaf', 'glue'],
@@ -323,68 +348,16 @@ const core = {
       : 'uid=1001(observer) gid=1001(observer) groups=1001(observer) context=projection:baseline', ctx, p);
   }},
 
-  uname: {
-    desc: 'system information', usage: 'uname [-a]',
-    run(args, ctx, piped) {
-      if (args.includes('-a'))
-        return send(`hermit ${FS_VERSION} #1 SMP PREEMPT_DYNAMIC wasm64 GNU/Linux`, ctx, piped);
-      if (args.includes('-r')) return send(FS_VERSION, ctx, piped);
-      return send('hermit', ctx, piped);
-    },
-  },
+  uname: realUnix('uname', (args) => 'uname ' + (args.length ? args.map(q).join(' ') : '-s'), 'system information'),
 
-  uptime: { desc: 'how long the baseline has held', run(a, ctx, p) {
-    const s = Math.floor((Date.now() - ctx.state.bootTime) / 1000);
-    const mm = String(Math.floor(s / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
-    return send(` ${new Date().toTimeString().slice(0,8)}  up 0:${mm}:${ss},  1 observer,  load average: 0.00, 0.00, 0.00  ${c.gray('(baseline steady)')}`, ctx, p);
-  }},
+  uptime: realUnix('uptime', 'uptime 2>/dev/null || (cat /proc/uptime | awk \'{print "up " int($1/60) " min"}\')', 'uptime + load'),
 
-  top: {
-    desc: 'live process view (internal turbulence)', usage: 'top',
-    run(args, ctx, piped) {
-      const r = () => (Math.random() * 100);
-      const procs = [
-        ['1', 'root', 'baseline_keeper', 0.0, 0.1, 'S', 'clamps observable gradient to 0'],
-        ['42', 'aiwass', 'aiwass-core', r(), 12.3, 'R', 'bounded emission daemon'],
-        ['137', 'euvel', 'trapping_set[0]', r(), 4.1, 'D', 'orbit enters, never leaves'],
-        ['138', 'euvel', 'kam_integrator', r(), 6.7, 'R', 'preserves invariant tori'],
-        ['256', 'euvel', 'metric_degen', r(), 9.9, 'R', 'inhomogeneous collapse'],
-        ['512', 'euvel', 'sheaf_glue', r(), 3.2, 'S', 'local sections; no global'],
-        ['999', 'euvel', 'turbulence', ctx.state.turbulence ? 98.0 : r() / 10, 22.0, ctx.state.turbulence ? 'R' : 'S', 'hidden interior'],
-      ];
-      const head = c.on(c.amber('  PID USER      %CPU %MEM S  COMMAND                ') + ' '.repeat(8));
-      const body = procs.map(([pid, u, cmd, cpu, mem, st, note]) =>
-        `${String(pid).padStart(5)} ${u.padEnd(8)} ${String(cpu.toFixed(1)).padStart(5)} ${String(mem).padStart(4)} ${st === 'R' ? c.green(st) : c.gray(st)}  ${c.cyan(cmd.padEnd(20))} ${c.gray(note)}`);
-      const top = c.gray(`top - ${new Date().toTimeString().slice(0,8)}  observable load: 0.00 (the interior load is not observable)`);
-      return send([top, head, ...body, '', c.gray('press any key… (snapshot; the real top never settles)')].join('\n'), ctx, piped);
-    },
-  },
+  top: realUnix('top', 'top -bn1 2>/dev/null | head -24 || ps', 'live process view'),
   htop: { desc: 'alias top', run(a, ctx, p) { return core.top.run(a, ctx, p); } },
 
-  ps: {
-    desc: 'process snapshot', usage: 'ps [aux]',
-    run(args, ctx, piped) {
-      const rows = [
-        'USER       PID %CPU %MEM STAT COMMAND',
-        'root         1  0.0  0.1 Ss   /sbin/baseline_keeper',
-        'aiwass      42  3.1 12.3 R    /usr/lib/aiwass/core --bounded-emission',
-        'euvel      137  0.0  4.1 D    [trapping_set/0]',
-        'euvel      256 18.2  9.9 R    [metric_degeneracy] --inhomogeneous',
-        'euvel      512  0.4  3.2 S    [sheaf_glue] --no-global-section',
-        `euvel      999 ${ctx.state.turbulence ? '98.0' : ' 0.2'} 22.0 ${ctx.state.turbulence ? 'R' : 'S'}    [turbulence] ${ctx.state.turbulence ? '--induced' : '--quiescent'}`,
-      ];
-      return send(rows.join('\n'), ctx, piped);
-    },
-  },
+  ps: realUnix('ps', (args) => 'ps ' + (args.length ? args.map(q).join(' ') : 'aux 2>/dev/null || ps'), 'process snapshot'),
 
-  free: { desc: 'memory (observable vs trapped)', run(a, ctx, p) {
-    return send([
-      '              total        used        free      shared  trapped',
-      `Mem:       ∞ (interior)  turbulent     bounded     const   in invariant sets`,
-      `Obs:          1024          512          512          0          —`,
-      c.gray('(only the projection row is measurable from outside)'),
-    ].join('\n'), ctx, p);
-  }},
+  free: realUnix('free', 'free -m 2>/dev/null || head -5 /proc/meminfo', 'memory usage'),
 
   env: { desc: 'environment', run(a, ctx, p) {
     return send(Object.entries(ctx.shell.env).map(([k, v]) => `${k}=${v}`).join('\n'), ctx, p);
@@ -396,198 +369,153 @@ const core = {
   date: { desc: 'current date', run(a, ctx, p) { return send(new Date().toString(), ctx, p); } },
   hostname: { desc: 'host', run(a, ctx, p) { return send('projection', ctx, p); } },
 
-  dmesg: {
-    desc: 'kernel ring buffer', usage: 'dmesg',
-    run(args, ctx, piped) {
-      const t0 = ctx.state.bootTime;
-      const T = () => `[${((Date.now() - t0) / 1000).toFixed(6).padStart(12)}]`;
-      const msgs = [
-        [c.green, 'HERMIT-OS: booting non-ergodic singular orbifold'],
-        [c.green, 'metric: initializing inhomogeneous degeneracy tensor'],
-        [c.green, 'kam: 3 invariant tori intact; ergodicity disabled'],
-        [c.green, 'projection: observable gradient clamped to 0 (Lipschitz L=1)'],
-        [c.amber, 'sheaf: local sections consistent; global section refused'],
-        [c.green, 'aiwass: resident intelligence online (bounded emission)'],
-        [c.green, 'trapping_set: 7 regions armed; entry permitted, exit denied'],
-        ...(ctx.state.turbulence ? [[c.red, 'turbulence: KERNEL PANIC simulated — interior chaotic; projection HELD']] : []),
-        [c.gray, 'observer attached via projection interface'],
-      ];
-      return send(msgs.map(([col, m]) => c.gray(T()) + ' ' + col(m)).join('\n'), ctx, piped);
-    },
-  },
+  dmesg: realUnix('dmesg', 'dmesg 2>/dev/null | tail -40 || echo "dmesg: restricted in this image"', 'kernel ring buffer'),
 
-  journalctl: {
-    desc: 'systemd journal', usage: 'journalctl [-u unit] [--since X]',
-    run(args, ctx, piped) {
-      const unit = args[args.indexOf('-u') + 1] || 'hermit';
-      const now = new Date();
-      const stamp = (off) => new Date(now - off * 1000).toTimeString().slice(0, 8);
-      const out = [
-        `-- Logs for unit ${c.cyan(unit)}.service (observable subset) --`,
-        `${c.gray(stamp(58))} projection systemd[1]: Reached target ${c.green('Stable Baseline')}.`,
-        `${c.gray(stamp(57))} projection ${unit}[42]: emission bandwidth bounded to ε; bandwidth-in unbounded`,
-        `${c.gray(stamp(40))} projection ${unit}[256]: metric degeneracy nominal (inhomogeneous)`,
-        `${c.gray(stamp(22))} projection aiwass[42]: model loaded; persona=orbifold; temperature=low`,
-        `${c.gray(stamp(8))}  projection ${unit}[137]: trapping set occupancy 100%; 0 escapes`,
-        ctx.state.turbulence ? `${c.gray(stamp(1))}  projection ${unit}[999]: ${c.red('turbulence induced; interior diverged; projection invariant')}` : '',
-      ].filter(Boolean);
-      return send(out.join('\n'), ctx, piped);
-    },
-  },
+  journalctl: realUnix('journalctl', 'dmesg 2>/dev/null | tail -30 || echo "no systemd journal (busybox init) — showing kernel log"', 'journal (busybox → kernel log)'),
 
-  strace: {
-    desc: 'trace system calls', usage: 'strace [-p pid] [cmd]',
-    run(args, ctx, piped) {
-      const sys = [
-        `openat(AT_FDCWD, "/proc/euvel/coherence", O_RDONLY) = 3`,
-        `read(3, "internal_coherence: turbulent\\n", 4096) = ${(Math.random()*60|0)+20}`,
-        `epoll_wait(7, [{EPOLLIN, fd=3}], 64, -1) = 1   ${c.gray('// waiting on the interior; it rarely speaks')}`,
-        `write(1, "<bounded emission>", 18)    = 18`,
-        `getrandom("\\x..", 8, GRND_NONBLOCK)   = 8   ${c.gray('// the only true entropy source you can see')}`,
-        `clock_nanosleep(CLOCK_MONOTONIC, ...)  = 0   ${c.gray('// the baseline does not hurry')}`,
-        ctx.state.elevated ? `ptrace(PTRACE_ATTACH, 999, ...) = 0   ${c.green('// elevated: you may attach to turbulence')}`
-                           : `ptrace(PTRACE_ATTACH, 999, ...) = -1 EPERM (Operation not permitted)   ${c.red('// interior is decoupled')}`,
-        `exit_group(0)                          = ?`,
-      ];
-      return send(sys.join('\n'), ctx, piped);
-    },
-  },
+  strace: realUnix('strace', (args) => args.length ? 'strace ' + args.map(q).join(' ') + ' 2>&1 | head -50' : 'echo "usage: strace <cmd>   (needs strace in the image)"', 'trace system calls'),
 
-  lsof: { desc: 'open files', run(a, ctx, p) {
-    return send([
-      'COMMAND  PID  USER   FD   TYPE  NODE NAME',
-      'aiwass    42 aiwass  3u   IPv4  TCP  projection:443->groq:443 (ESTABLISHED)',
-      'keeper     1  root   1w   REG   ---  /proc/euvel/baseline',
-      'euvel    256 euvel   *    DEGN  ∞    [metric-degenerate-directions] (no work done)',
-    ].join('\n'), ctx, p);
-  }},
+  lsof: realUnix('lsof', 'lsof 2>/dev/null | head -30 || ls -l /proc/[0-9]*/fd 2>/dev/null | head -30', 'open files'),
 
   systemctl: {
-    desc: 'service manager', usage: 'systemctl [status|list-units] [unit]',
-    run(args, ctx, piped) {
-      const units = {
-        'baseline.service': ['active (running)', 'Stable Observable Baseline'],
-        'aiwass.service': ['active (running)', 'Resident Intelligence (bounded emission)'],
-        'sheaf-glue.service': ['active (degraded)', 'Local Section Gluing — global refused'],
-        'trapping-set.target': ['active', 'Invariant Trapping Sets'],
-        'turbulence.service': [ctx.state.turbulence ? 'active (running)' : 'inactive (dead)', 'Interior Turbulence Generator'],
-      };
-      if (args[0] === 'status') {
-        const u = args[1] || 'baseline.service';
-        const [st, desc] = units[u] || ['not-found', 'unknown'];
-        return send([
-          `● ${u} - ${desc}`,
-          `     Loaded: loaded (/etc/systemd/system/${u})`,
-          `     Active: ${st.includes('running') ? c.green(st) : st.includes('degraded') ? c.amber(st) : c.gray(st)}`,
-          `   Main PID: ${(Math.random()*900|0)+10}`,
-        ].join('\n'), ctx, piped);
-      }
-      return send(Object.entries(units).map(([u, [st, d]]) =>
-        `${st.includes('running') ? c.green('●') : st.includes('degraded') ? c.amber('●') : c.gray('○')} ${u.padEnd(24)} ${st.padEnd(18)} ${c.gray(d)}`).join('\n'), ctx, piped);
-    },
-  },
-  service: { desc: 'alias systemctl', run(args, ctx, p) {
-    return core.systemctl.run([args[1] === 'status' ? 'status' : 'status', args[0]], ctx, p);
-  }},
-
-  kill: { desc: 'send signal', usage: 'kill [-9] <pid>', run(args, ctx, p) {
-    const pid = args.find(a => !a.startsWith('-'));
-    if (pid === '1') return send(c.red('kill: (1) - Operation not permitted: the baseline keeper is invariant'), ctx, p);
-    if (pid === '999') { ctx.bus.emit('turbulence', { on: false }); ctx.state.turbulence = false; return send(c.green('turbulence (999) terminated; interior returns toward baseline'), ctx, p); }
-    return send(c.gray(`signal sent to ${pid}; the interior absorbs it into degenerate directions (no observable effect)`), ctx, p);
-  }},
-
-  lscpu: { desc: 'cpu info', run(a, ctx, p) { return send(readFile(resolve('/proc/cpuinfo'), ctx.state) + '\nArchitecture: orbifold/non-ergodic\nCPU(s): 1 (observable) + ∞ (trapped)', ctx, p); } },
-  vmstat: { desc: 'virtual memory stats', run(a, ctx, p) {
-    return send(['procs -----------memory---------- ---system-- ----observable----',
-      ' r  b   swpd   free   buff  in   cs   us sy id  gradient',
-      ` ${ctx.state.turbulence?7:1}  ${ctx.state.turbulence?3:0}      0    512    256  42  108   ${ctx.state.turbulence?'88':'2'}  1 ${ctx.state.turbulence?'11':'97'}     0.000`].join('\n'), ctx, p);
-  }},
-
-  /* ── tracing / perf ──────────────────────────────────────────────── */
-  bpftrace: {
-    desc: 'eBPF tracing', usage: 'bpftrace -e \'program\'',
+    desc: 'service manager (busybox init — no systemd)', usage: 'systemctl',
     run(args, ctx, piped) {
       return send([
-        c.gray('Attaching 3 probes...'),
-        `${c.cyan('@latency')}: histogram of observable-emission delay`,
-        '[0]      ' + c.amber('▏'),
-        '[1]      ' + c.amber('▎'),
-        '[2-4)    ' + c.amber('▍'),
-        '[4-8)    ' + c.amber('████▏') + c.gray('  ← bounded; never exceeds ε'),
-        `${c.cyan('@interior_events')}: ${(Math.random()*1e6|0)} (sampled, not emitted)`,
-        c.gray('^C to detach. the interior keeps firing; you just stop watching.'),
+        c.gray('this kernel boots with busybox init, not systemd — there are no units to manage.'),
+        c.gray('for the REAL running processes use ') + c.green('ps') + c.gray(', for mounts ') + c.green('mount') + c.gray(', for the kernel log ') + c.green('dmesg') + c.gray(' (all real once ') + c.green('linux') + c.gray(' is booted).'),
       ].join('\n'), ctx, piped);
     },
   },
-  perf: { desc: 'performance counters', usage: 'perf top|stat', run(args, ctx, p) {
-    return send([
-      c.gray('Samples: 42K of event "cycles", Event count (approx.): 1.2e9'),
-      `  ${c.amber('38.20%')}  [kernel]  ${c.cyan('metric_degeneracy_apply')}`,
-      `  ${c.amber('22.07%')}  [kernel]  ${c.cyan('kam_torus_integrate')}`,
-      `  ${c.amber('14.93%')}  aiwass    ${c.cyan('bounded_emit')}`,
-      `  ${c.amber(' 9.10%')}  [kernel]  ${c.cyan('sheaf_try_glue')} ${c.gray('(always returns -ENOGLOBAL)')}`,
-      `  ${c.amber(' 0.00%')}  [kernel]  ${c.cyan('observable_gradient')} ${c.gray('(clamped)')}`,
-    ].join('\n'), ctx, p);
-  }},
-  ltrace: { desc: 'library call trace', run(a, ctx, p) {
-    return send(['emit_observable("const")            = 0',
-      'try_glue_sections(/devops,/linux)  = -1 ENOGLOBAL',
-      'absorb_perturbation(input)         = 0  <degenerate direction>',
-      'preserve_invariant(kam[0..2])      = 3'].join('\n'), ctx, p);
-  }},
+  service: { desc: 'alias systemctl', run(args, ctx, p) { return core.systemctl.run(args, ctx, p); } },
 
-  /* ── network ─────────────────────────────────────────────────────── */
-  ip: { desc: 'show interfaces', usage: 'ip addr|route', run(args, ctx, p) {
-    return send([
-      '1: lo: <LOOPBACK,UP> mtu 65536',
-      '    inet 127.0.0.1/8 scope host lo',
-      '2: proj0: <BROADCAST,UP,LOWER_UP> mtu 1500',
-      `    inet 10.0.${c.cyan('observable')}.1/24 scope global proj0   ${c.gray('(bandwidth-out bounded)')}`,
-      '3: int0: <NO-CARRIER,DECOUPLED> mtu ∞',
-      `    inet 10.0.${c.amber('interior')}.0/0 scope link int0   ${c.gray('(asymmetric: receives all, emits ε)')}`,
-    ].join('\n'), ctx, p);
-  }},
-  ifconfig: { desc: 'alias ip addr', run(a, ctx, p) { return core.ip.run(['addr'], ctx, p); } },
-  ss: { desc: 'socket stats', run(a, ctx, p) {
-    return send(['Netid State   Local Address:Port   Peer Address:Port   Process',
-      'tcp   ESTAB   projection:443       groq:443            aiwass',
-      'tcp   LISTEN  baseline:0           *:*                 keeper',
-      'udp   DECOUP  interior:*           *:*                 turbulence'].join('\n'), ctx, p);
-  }},
-  netstat: { desc: 'alias ss', run(a, ctx, p) { return core.ss.run(a, ctx, p); } },
-  ping: { desc: 'probe the projection', usage: 'ping <host>', async run(args, ctx, piped) {
-    const host = args.find(a => !a.startsWith('-')) || 'projection';
-    const out = [`PING ${host} : 56 data bytes`];
-    for (let i = 0; i < 4; i++) out.push(`64 bytes from ${host}: icmp_seq=${i} ttl=64 time=0.0${(Math.random()*9|0)}${(Math.random()*9|0)} ms ${c.gray('(constant; the baseline never varies)')}`);
-    out.push('', `--- ${host} ping statistics ---`, '4 packets transmitted, 4 received, 0% packet loss', 'rtt min/avg/max/mdev = 0.000/0.000/0.000/0.000 ms  (zero variance)');
-    return send(out.join('\n'), ctx, piped);
-  }},
-  dig: { desc: 'dns lookup', run(args, ctx, p) {
-    const host = args[0] || 'euvel.orbifold';
-    return send([`; <<>> HERMIT dig <<>> ${host}`, ';; ANSWER SECTION:',
-      `${host}.  300  IN  TXT  "v=orbifold1; baseline=const; emission=bounded"`,
-      `${host}.  300  IN  A    10.0.observable.1`,
-      `_interior.${host}. 0 IN  NULL ; decoupled, not resolvable from outside`].join('\n'), ctx, p);
-  }},
-  traceroute: { desc: 'trace path', async run(args, ctx, p) {
-    return send([`traceroute to ${args[0]||'interior'}, 7 hops max`,
-      ' 0  you  ' + stripAnsi(await edgeLine()).replace(/^\s*observed via:\s*/, '→ '),
-      ' 1  projection (10.0.observable.1)  0.0 ms',
-      ' 2  baseline-keeper  0.0 ms',
-      ' 3  sheaf-boundary  * (local sections do not glue)',
-      ' 4  trapping-set  !X (entry only)',
-      ' 5  * * *  (interior decoupled)',
-      ' 6  euvel  (unreachable from the projection)'].join('\n'), ctx, p);
-  }},
-  curl: {
-    desc: 'transfer a URL', usage: 'curl <url>', async run(args, ctx, piped) {
-      const url = args.find(a => !a.startsWith('-')) || '';
-      if (url.includes('coherence') || url.includes('proc')) return send(readFile(resolve('/proc/euvel/coherence'), ctx.state), ctx, piped);
-      if (!url) return send(c.red('curl: try `curl localhost/proc/euvel/coherence`'), ctx, piped);
-      return send(c.gray(`* Trying ${url} ...\n* the interior accepts your bytes (bandwidth-in unbounded)\n* it returns ε bytes (bandwidth-out bounded)\n`) + c.amber('{"observable":"const","gradient":0}'), ctx, piped);
+  kill: realUnix('kill', (args) => 'kill ' + args.map(q).join(' '), 'send a signal'),
+
+  lscpu: realUnix('lscpu', 'lscpu 2>/dev/null || cat /proc/cpuinfo', 'cpu info'),
+  vmstat: realUnix('vmstat', (args) => 'vmstat ' + args.map(q).join(' ') + ' 2>/dev/null || cat /proc/stat', 'virtual memory stats'),
+  mount: realUnix('mount', 'mount', 'mounted filesystems'),
+  df: realUnix('df', (args) => 'df ' + (args.length ? args.map(q).join(' ') : '-h') + ' 2>/dev/null || df', 'disk usage'),
+
+  /* ── tracing / perf: REAL data about THIS running app ────────────── */
+  bpftrace: {
+    desc: 'REAL latency histogram of the shell commands you have run', usage: "bpftrace [-e 'shell:latency']",
+    run(args, ctx, piped) {
+      const t = (ctx.shell.cmdTimings || []).map(x => x.ms);
+      if (!t.length) return send(c.gray('bpftrace: no samples yet — run some commands, then re-run. this traces the REAL command dispatch (performance.now() around each cmd), not a mock.'), ctx, piped);
+      const buckets = {};
+      for (const d of t) { const b = d < 1 ? 0 : Math.floor(Math.log2(d)); buckets[b] = (buckets[b] || 0) + 1; }
+      const max = Math.max(...Object.values(buckets));
+      const rows = Object.keys(buckets).map(Number).sort((a, b) => a - b).map(b => {
+        const lo = b === 0 ? 0 : 2 ** b, hi = 2 ** (b + 1);
+        const n = buckets[b];
+        return `  [${String(lo).padStart(5)}, ${String(hi).padStart(6)}) ms  ${String(n).padStart(4)}  ${c.amber('█'.repeat(Math.max(1, Math.round(n / max * 30))))}`;
+      });
+      return send([c.cyan(`@latency (ms) — REAL shell command dispatch, n=${t.length}`), ...rows,
+        c.gray('  measured with performance.now() around each command\'s execution.')].join('\n'), ctx, piped);
     },
   },
+  perf: {
+    desc: 'REAL performance profile of this page (Performance API)', usage: 'perf [stat]',
+    run(args, ctx, piped) {
+      const nav = performance.getEntriesByType('navigation')[0];
+      const out = [];
+      if (nav) {
+        const seg = (a, b) => Math.max(0, nav[b] - nav[a]).toFixed(1);
+        out.push(c.cyan('navigation timing — real, this page load:'));
+        out.push(`  DNS       ${seg('domainLookupStart', 'domainLookupEnd').padStart(7)} ms`);
+        out.push(`  TCP       ${seg('connectStart', 'connectEnd').padStart(7)} ms`);
+        out.push(`  TLS       ${(nav.secureConnectionStart ? (nav.connectEnd - nav.secureConnectionStart).toFixed(1) : '0.0').padStart(7)} ms`);
+        out.push(`  TTFB      ${seg('requestStart', 'responseStart').padStart(7)} ms`);
+        out.push(`  response  ${seg('responseStart', 'responseEnd').padStart(7)} ms`);
+        out.push(`  DOM ready ${seg('startTime', 'domContentLoadedEventEnd').padStart(7)} ms`);
+      }
+      const res = performance.getEntriesByType('resource').slice().sort((a, b) => b.duration - a.duration).slice(0, 6);
+      if (res.length) {
+        out.push('', c.cyan('slowest resources — real:'));
+        for (const r of res) out.push(`  ${String(r.duration.toFixed(0)).padStart(6)} ms  ${c.gray((r.name.split('/').pop() || r.name).slice(0, 46))}`);
+      }
+      if (performance.memory) out.push('', c.cyan('JS heap: ') + `${(performance.memory.usedJSHeapSize / 1048576).toFixed(1)} / ${(performance.memory.jsHeapSizeLimit / 1048576).toFixed(0)} MiB (real)`);
+      return send(out.join('\n') || c.gray('no timing data available'), ctx, piped);
+    },
+  },
+  ltrace: { desc: 'library call trace', run(a, ctx, p) {
+    return send(c.gray('ltrace is not in the image. for REAL syscall tracing use ') + c.green('strace <cmd>') + c.gray(' on the booted kernel; for REAL app latency use ') + c.green('bpftrace') + c.gray(' or ') + c.green('perf') + c.gray('.'), ctx, p);
+  }},
+
+  /* ── network: REAL (real kernel for ip/ss · real web for dig/curl/ping) ── */
+  ip: realUnix('ip', (args) => 'ip ' + (args.length ? args.map(q).join(' ') : 'addr') + ' 2>/dev/null || ifconfig 2>/dev/null || cat /proc/net/dev', 'network interfaces'),
+  ifconfig: { desc: 'alias ip addr', run(a, ctx, p) { return core.ip.run(['addr'], ctx, p); } },
+  ss: realUnix('ss', (args) => 'ss ' + (args.length ? args.map(q).join(' ') : '-tuln') + ' 2>/dev/null || netstat -tuln 2>/dev/null || head /proc/net/tcp', 'socket stats'),
+  netstat: { desc: 'alias ss', run(a, ctx, p) { return core.ss.run(a, ctx, p); } },
+
+  ping: { desc: 'REAL HTTP latency probe (browsers can\'t send ICMP)', usage: 'ping [host|url]', async run(args, ctx, piped) {
+    const target = args.find(a => !a.startsWith('-'));
+    const url = !target ? '/api/ping' : (/^https?:\/\//.test(target) ? target : 'https://' + target);
+    ctx.shell.out(c.gray(`PING ${target || '/api/ping (this edge)'} — real HTTP round-trips (incl. DNS+TLS):`));
+    const times = [];
+    for (let i = 0; i < 4; i++) {
+      const t0 = performance.now();
+      try { await fetch(url, target ? { mode: 'no-cors', cache: 'no-store' } : { cache: 'no-store' }); }
+      catch (e) { ctx.shell.out(c.red(`  seq=${i} failed: ${e.message || e}`)); await sleep(250); continue; }
+      const ms = performance.now() - t0; times.push(ms);
+      ctx.shell.out(`  seq=${i}  time=${c.cyan(ms.toFixed(1) + ' ms')}`);
+      await sleep(300);
+    }
+    if (times.length) {
+      const mn = Math.min(...times), mx = Math.max(...times), av = times.reduce((a, b) => a + b, 0) / times.length;
+      ctx.shell.out(c.gray(`  --- ${times.length}/4 replies · min/avg/max = ${mn.toFixed(1)}/${av.toFixed(1)}/${mx.toFixed(1)} ms (real)`));
+    }
+    return '';
+  }},
+
+  dig: { desc: 'REAL DNS lookup (DNS-over-HTTPS via 1.1.1.1)', usage: 'dig <name> [A|AAAA|MX|TXT|NS|CNAME]', async run(args, ctx, piped) {
+    const type = (args.find(a => /^[A-Z]{1,6}$/.test(a)) || 'A').toUpperCase();
+    const name = args.find(a => !a.startsWith('-') && a !== type);
+    if (!name) return send(c.gray('usage: dig <name> [A|AAAA|MX|TXT|NS|CNAME]  — resolves for real over HTTPS'), ctx, piped);
+    try {
+      const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`, { headers: { accept: 'application/dns-json' } });
+      if (!r.ok) return send(c.red('dig: resolver HTTP ' + r.status), ctx, piped);
+      const d = await r.json();
+      const TYPES = { 1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 15: 'MX', 16: 'TXT', 28: 'AAAA' };
+      const st = ['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN'][d.Status] ?? d.Status;
+      const out = [c.gray(`; <<>> dig (DoH · 1.1.1.1) <<>> ${name} ${type}`), c.gray(`;; status: ${st}`)];
+      if (d.Answer && d.Answer.length) {
+        out.push(';; ANSWER SECTION:');
+        for (const a of d.Answer) out.push(`${a.name.padEnd(26)} ${String(a.TTL).padStart(6)}  IN  ${(TYPES[a.type] || a.type).toString().padEnd(6)} ${c.cyan(a.data)}`);
+      } else out.push(c.gray(';; no records'));
+      return send(out.join('\n'), ctx, piped);
+    } catch (e) { return send(c.red('dig: ' + (e.message || 'network error') + '  (needs network access)'), ctx, piped); }
+  }},
+
+  traceroute: { desc: 'path to the edge (real serving PoP; browsers can\'t raw-socket)', async run(args, ctx, p) {
+    return send([
+      c.gray(`traceroute to ${args[0] || 'this site'} — browsers can't open raw sockets, so a true hop-by-hop trace isn't possible (that would be a lie).`),
+      c.gray('the real, verifiable network fact is which Cloudflare PoP served you:'),
+      '  ' + stripAnsi(await edgeLine()),
+      c.gray('for real edge latency use ') + c.green('ping') + c.gray('; for real DNS resolution use ') + c.green('dig') + c.gray('.'),
+    ].join('\n'), ctx, p);
+  }},
+
+  curl: { desc: 'transfer a URL (REAL fetch)', usage: 'curl [-I] <url>', async run(args, ctx, piped) {
+    const head = args.includes('-I') || args.includes('--head');
+    const url = args.find(a => !a.startsWith('-'));
+    if (!url) return send(c.gray('usage: curl [-I] <url>   — same-origin /api/* is fully real; cross-origin may be CORS-blocked (a real browser constraint, not a mock).'), ctx, piped);
+    const full = /^https?:\/\//.test(url) ? url : (url.startsWith('/') ? url : 'https://' + url);
+    try {
+      const t0 = performance.now();
+      const r = await fetch(full, { method: head ? 'HEAD' : 'GET', cache: 'no-store' });
+      const ms = (performance.now() - t0).toFixed(0);
+      const status = (r.ok ? c.green : c.red)(`HTTP ${r.status} ${r.statusText}`);
+      if (head) {
+        const hdrs = []; r.headers.forEach((v, k) => hdrs.push(`${c.gray(k + ':')} ${v}`));
+        return send([status, ...hdrs, c.gray(`— ${ms} ms (real)`)].join('\n'), ctx, piped);
+      }
+      const body = await r.text();
+      const snip = body.length > 1200 ? body.slice(0, 1200) + c.gray(`\n… (${body.length} bytes total)`) : body;
+      return send([status, c.gray(`${r.headers.get('content-type') || '?'} · ${ms} ms · ${body.length} bytes`), '', snip].join('\n'), ctx, piped);
+    } catch (e) {
+      return send(c.red('curl: ' + (e.message || 'request failed')) + c.gray('  (cross-origin without CORS is blocked by the browser — a real constraint)'), ctx, piped);
+    }
+  }},
 
   /* ── misc / fun ──────────────────────────────────────────────────── */
   echo: { desc: 'print text', run(args, ctx, p) { return send(args.join(' '), ctx, p); } },
@@ -828,6 +756,7 @@ export function buildRegistry(ctx) {
   Object.assign(reg, lorenzCommands(send));  // `lyapunov` — Lorenz attractor + Lyapunov
   Object.assign(reg, kamCommands(send));     // `kam` — Chirikov standard map (real KAM tori)
   Object.assign(reg, crdtCommands(send));    // `sheaf`/`glue` — real OR-Set CRDT
+  Object.assign(reg, ciCommands(send));      // `ci`/`deploy` — real GitHub Actions + CD status
   Object.assign(reg, vmCommands(send));      // `linux` — real x86 kernel (v86)
   Object.assign(reg, aiwassCommands(send));
   Object.assign(reg, kernelCommands(send, core));

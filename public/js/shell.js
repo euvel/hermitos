@@ -150,8 +150,13 @@ export class Shell {
         return;
       }
       const piped = { stdin: input, piped: !isLast };
+      const _t0 = performance.now();
       try {
         const result = await cmd.run(args, this.ctx, piped);
+        // record REAL per-command dispatch latency (surfaced by `bpftrace`)
+        if (!this.cmdTimings) this.cmdTimings = [];
+        this.cmdTimings.push({ name, ms: performance.now() - _t0 });
+        if (this.cmdTimings.length > 500) this.cmdTimings.shift();
         if (!isLast) {
           // capture stdout for next stage
           input = (typeof result === 'string') ? result : (cmd._captured || '');

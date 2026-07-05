@@ -1,0 +1,31 @@
+name: CI
+
+# Real CI for hermit. Runs on every push/PR: syntax-checks all client and
+# edge JavaScript, then runs the logic test suite that asserts the actual
+# mathematics the site demonstrates (Lorenz Lyapunov, KAM transport barrier,
+# CRDT convergence). The site's `ci` command reads these runs back live.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax-check all client + edge JS
+        run: |
+          set -e
+          find public/js functions -name '*.js' -print0 | xargs -0 -n1 node --check
+          echo "all JavaScript parses ✓"
+
+      - name: Logic test suite (real dynamical systems + CRDT)
+        run: node --test test/*.test.mjs
