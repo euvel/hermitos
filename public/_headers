@@ -8,3 +8,11 @@
 
 /api/*
   Cache-Control: no-store
+
+# ES modules must revalidate so a redeploy takes effect immediately
+# (etag still yields 304s; this only prevents serving stale code).
+/js/*
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
