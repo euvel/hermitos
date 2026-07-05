@@ -92,6 +92,8 @@ export class Shell {
 
     // support ';' sequencing and basic '|' to grep/less are handled in-command
     const segments = splitTop(trimmed, ';');
+    // the background field answers every command with a reactive tap
+    try { const n0 = parse(segments[0].split('|')[0].trim()).name; this.ctx.bus && this.ctx.bus.emit('orbifold:cmd', { weight: cmdWeight(n0) }); } catch (_) {}
     this.busy = true;
     for (const seg of segments) {
       await this.execOne(seg.trim());
@@ -307,6 +309,14 @@ export class Shell {
 export function parse(line) {
   const tokens = tokenize(line);
   return { name: tokens[0] || '', args: tokens.slice(1) };
+}
+
+// how strongly a command should ripple the background field (its "weight")
+function cmdWeight(name) {
+  if (/^(chaos|induce|kernel|dissociate|kill|panic)$/.test(name)) return 0.95;
+  if (/^(python3?|kam|lyapunov|attractor|train|nn|sheaf|glue|helm|kubectl|watch)$/.test(name)) return 0.8;
+  if (/^(linux|vm|boot|sql|source|git|aiwass|curl|ping|traceroute|dig|edge)$/.test(name)) return 0.6;
+  return 0.4;   // ls / cd / cat / help / everyday nav
 }
 
 function tokenize(line) {

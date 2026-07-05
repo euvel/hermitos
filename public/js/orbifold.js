@@ -69,6 +69,8 @@ export class Orbifold {
     this.cur = { turb: 0, chaos: 0, recover: 0, elevated: 0, pulse: 0 };
     this.tgt = { turb: 0, chaos: 0, recover: 0, elevated: 0, pulse: 0 };
     this.cam = { yaw: 0, pitch: 0.25, dragging: false, lx: 0, ly: 0, vyaw: 0.06 };
+    this.tapJitter = 0;          // brief ripple on each command the user runs
+    this.wasStressed = false;    // for the auto-recover-after-chaos settle
 
     // particle state (integrated on the CPU, drawn on the GPU)
     this.pos = new Float32Array(N_MAX * 3);
@@ -143,6 +145,12 @@ export class Orbifold {
     b.on('turbulence', ({ on }) => { this.tgt.turb = on ? 1 : 0; });
     b.on('elevate', ({ on }) => { this.tgt.elevated = on ? 1 : 0; this.pulse(); });
     b.on('orbifold:pulse', () => this.pulse());
+    // a reactive tap on EVERY command the user runs — the field answers activity
+    b.on('orbifold:cmd', ({ weight }) => {
+      const w = Math.max(0.2, Math.min(1, weight || 0.4));
+      this.cur.pulse = Math.max(this.cur.pulse, w);
+      this.tapJitter = Math.max(this.tapJitter, 0.006 * w);
+    });
     b.on('orbifold:mode', ({ mode }) => {
       if (mode === 'calm') { this.tgt.turb = 0; }
       if (mode === 'wild') { this.tgt.turb = 0.7; }
@@ -178,7 +186,11 @@ export class Orbifold {
 
   // is a full-screen lab covering the field? then don't waste the GPU on it
   occluded() {
-    return document.hidden || !!document.querySelector('#km-overlay, #ly-overlay, #nn-overlay, #vm-overlay');
+    if (document.hidden) return true;
+    // a *backgrounded* (display:none) overlay must NOT keep the field paused —
+    // this is what made the background stop after `linux` → Ctrl-] → agent.
+    return [...document.querySelectorAll('#km-overlay,#ly-overlay,#nn-overlay,#vm-overlay')]
+      .some(el => el.style.display !== 'none');
   }
 
   integrate(dt, b, jitter) {
@@ -227,6 +239,13 @@ export class Orbifold {
 
     const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now;
 
+    // perturbations self-heal: targets relax to baseline so the field always
+    // recovers to calm after chaos, unless something is actively re-driving it.
+    const relax = Math.pow(0.72, dt);                     // ~2s half-life
+    if (this.tgt.turb > 0.25) this.wasStressed = true;
+    this.tgt.turb *= relax; this.tgt.chaos *= relax;
+    if (this.wasStressed && this.tgt.turb < 0.05) { this.wasStressed = false; this.cur.recover = 1; }
+
     // smooth the reactive signals
     const L = (a, t, k) => a + (t - a) * k;
     this.cur.turb = L(this.cur.turb, this.tgt.turb, 0.04);
@@ -241,7 +260,8 @@ export class Orbifold {
     // settles (a green "healing") before relaxing back to baseline.
     const stress = Math.max(0, Math.min(1, this.cur.turb + this.cur.chaos * 0.5));
     const b = B_BASE - 0.03 * stress + this.cur.recover * 0.13;
-    const jitter = stress * 0.008;                        // extra turbulence when perturbed
+    const jitter = stress * 0.008 + this.tapJitter;       // turbulence + per-command ripple
+    this.tapJitter *= Math.pow(0.05, dt);                 // the command ripple fades fast
     this.integrate(dt, b, jitter);
     this.posAttr.needsUpdate = true;
     this.spdAttr.needsUpdate = true;
