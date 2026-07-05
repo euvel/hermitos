@@ -199,12 +199,15 @@ export function kernelCommands(send, core) {
           ctx.shell.busy = true;
           const lx = await bootRealKernel(ctx, {});
           if (!lx) { ctx.shell.busy = false; ctx.shell.out(noImageMessage()); ctx.shell.prompt(); return ''; }
-          lx.attachDisplay(true);
           ctx.term.write('\r\n');
-          const ok = await Promise.race([lx.whenReady.then(() => true), sleep(90000).then(() => false)]);
-          lx.attachDisplay(false);
+          lx.bootStream = true;                 // clean, noise-filtered boot log
+          const t0 = Date.now();
+          const tick = setInterval(() => { if (!lx.ready) ctx.term.write(c.gray(`  … booting the real kernel (${Math.round((Date.now() - t0) / 1000)}s)`) + '\r\n'); }, 5000);
+          const ok = await Promise.race([lx.whenReady.then(() => true), sleep(60000).then(() => false)]);
+          clearInterval(tick);
+          lx.bootStream = false;
           ctx.shell.busy = false;
-          if (!ok) { ctx.shell.out('\r\n' + c.red('kernel: the real kernel did not reach a shell in time.')); ctx.shell.prompt(); return ''; }
+          if (!ok) { ctx.shell.out('\r\n' + c.red('kernel: the real kernel did not reach a shell in time.') + c.gray(' (it may still be up — try ') + c.green('kernel integrate') + c.gray('.)')); ctx.shell.prompt(); return ''; }
           ctx.shell.out('\r\n' + c.green('● real kernel ready.') + c.gray('  now fuse them into one terminal: ') + c.cyan('kernel integrate'));
           ctx.shell.prompt();
           return '';

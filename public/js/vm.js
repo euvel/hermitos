@@ -84,7 +84,7 @@ export async function bootRealKernel(ctx, { onError } = {}) {
 
   let resolveReady;
   const linux = {
-    emulator, ready: false, display: false, published: false,
+    emulator, ready: false, display: false, bootStream: false, published: false,
     whenReady: new Promise((res) => { resolveReady = res; }),
     sendRaw: (d) => { try { emulator.serial0_send(d); } catch (_) {} },
     attachDisplay: (on) => { linux.display = !!on; },
@@ -92,21 +92,34 @@ export async function bootRealKernel(ctx, { onError } = {}) {
   };
   ctx.state.linux = linux;
 
+  // image-init noise we never want the visitor to see
+  const NOISE = [/host9p/i, /Files? send via emulator/i, /mounting .* failed/i, /appear in \/mnt/i];
+
   // ── serial bridge ────────────────────────────────────────────────
-  let cap = null, sbuf = '', swbuf = '', loggedIn = false;
+  let cap = null, sbuf = '', swbuf = '', loggedIn = false, lineBuf = '';
   const onByte = (byte) => {
     const ch = typeof byte === 'number' ? String.fromCharCode(byte) : String(byte);
     if (cap) { cap.buf += ch; cap.check(); }
 
     sbuf = (sbuf + ch).slice(-240);
     if (!loggedIn && /login:\s*$/i.test(sbuf)) { loggedIn = true; sbuf = ''; emulator.serial0_send((manifest.login || 'root') + '\n'); }
-    else if (!linux.ready && /[#$]\s$/.test(sbuf)) { linux.ready = true; resolveReady(linux); }
+    // prompt = a line ending in # $ % or > then a space (covers ~%, root#, $, etc.)
+    else if (!linux.ready && /[#$%>]\s$/.test(sbuf)) { linux.ready = true; resolveReady(linux); }
 
     // guest→host control (kernel switch typed inside real Linux)
     swbuf = (swbuf + ch).slice(-40);
     const m = swbuf.match(SWITCH_RE);
-    if (m) { swbuf = ''; if (m[1] === 'imaginary') ctx.shell.enterImaginary(); else ctx.shell.enterReal(); return; }
+    if (m) { swbuf = ''; lineBuf = ''; if (m[1] === 'imaginary') ctx.shell.enterImaginary(); else ctx.shell.enterReal(); return; }
 
+    // boot phase: line-buffered, noise-filtered, clean display
+    if (linux.bootStream) {
+      if (ch === '\n') {
+        const line = lineBuf.replace(/[^\x20-\x7e]/g, '').trim(); lineBuf = '';
+        if (line && !NOISE.some((re) => re.test(line))) ctx.term.write('  ' + c.gray(line) + '\r\n');
+      } else if (ch !== '\r') { lineBuf += ch; if (lineBuf.length > 400) lineBuf = lineBuf.slice(-400); }
+      return;
+    }
+    // real mode: raw passthrough
     if (linux.display) ctx.term.write(ch);
   };
   try { emulator.add_listener('serial0-output-byte', onByte); } catch (_) {}
