@@ -23,32 +23,38 @@ const state = {
   // no secret is stored client-side; kernel auth uses an HttpOnly session cookie
 };
 
-/* ── boot splash ─────────────────────────────────────────────────── */
-const BOOT_LINES = [
-  ['', 0],
-  ['<span class="ok">hermit</span>  ·  booting the <span class="ok">imaginary kernel</span>  ·  (𝑖) résumé + tools', 40],
-  ['[<span class="ok">  OK  </span>] Mounted virtual filesystem', 80],
-  ['[<span class="ok">  OK  </span>] Initialized WebGL field renderer', 80],
-  ['[<span class="ok">  OK  </span>] Loaded shell — pipes · history · completion', 80],
-  ['[<span class="ok">  OK  </span>] Registered command set', 70],
-  ['[<span class="ok">  OK  </span>] Probed edge API', 80],
-  ['[<span class="ok">  OK  </span>] Subsystems: python (wasm) · sql (d1) · neural lab · dynamical systems', 110],
-  ['[<span class="dim">....</span>] Real kernel (ℝ, x86 Linux) available — <span class="dim">kernel boot real</span>', 90],
-  ['[<span class="ok">  OK  </span>] Reached target <span class="ok">Imaginary Ready</span>', 110],
-  ['', 60],
-  ['<span class="dim">ready. type `help` to begin.</span>', 200],
-];
+/* ── cinematic entry ─────────────────────────────────────────────────
+   No fake boot logs (that was chest-beating). The mark resolves from dark,
+   an understated wordmark + one humble line fade in, then it lifts — on a
+   keypress, a click, the "enter" button, or after a short beat. */
+const CINE_TAG = 'a working terminal — not a page. look around.';
 
-async function boot() {
-  const log = $('boot-log');
-  for (const [line, delay] of BOOT_LINES) {
-    log.innerHTML += line + '\n';
-    await sleep(delay);
-  }
-  await sleep(280);
-  $('boot').classList.add('gone');
-  setTimeout(() => { $('boot').remove(); }, 900);
-  $('shell').hidden = false;
+function boot() {
+  return new Promise((resolve) => {
+    const el = $('boot');
+    $('cine-tag').textContent = CINE_TAG;
+    requestAnimationFrame(() => el.classList.add('reveal'));
+    const enterBtn = $('cine-enter');
+    setTimeout(() => { enterBtn.hidden = false; }, 1300);
+
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      window.removeEventListener('keydown', finish);
+      window.removeEventListener('pointerdown', finish);
+      el.classList.add('gone');
+      setTimeout(() => el.remove(), 1050);
+      $('shell').hidden = false;
+      resolve();
+    };
+    enterBtn.addEventListener('click', finish);
+    // let the reveal breathe before a stray click/keypress can skip it
+    setTimeout(() => {
+      window.addEventListener('keydown', finish);
+      window.addEventListener('pointerdown', finish);
+    }, 700);
+    setTimeout(finish, 4400);   // auto-advance if they just watch
+  });
 }
 
 /* ── terminal ────────────────────────────────────────────────────── */
@@ -208,25 +214,38 @@ function wireStatus() {
   });
 }
 
-/* ── welcome banner ──────────────────────────────────────────────── */
-function welcome(shell) {
-  shell.out('');
-  shell.out(c.amber('  ╦ ╦╔═╗╦═╗╔╦╗╦╔╦╗'));
-  shell.out(c.amber('  ╠═╣║╣ ╠╦╝║║║║ ║ ') + c.gray('   an interactive systems terminal'));
-  shell.out(c.amber('  ╩ ╩╚═╝╩╚═╩ ╩╩ ╩ '));
-  shell.out('');
-  shell.out(c.gray('  a real shell with real tools — nothing here is a slideshow. try things.'));
-  shell.out(c.gray('  this is the ') + c.cyan('imaginary kernel (𝑖)') + c.gray(' — résumé + tools. a whole ') + c.cyan('real Linux (ℝ)') + c.gray(' is one command away:'));
-  shell.out(c.gray('           ') + c.green('kernel boot real') + c.gray(' → ') + c.green('kernel integrate') + c.gray('  fuses them into one ') + c.cyan('complex terminal (ℂ = ℝ + 𝑖)') + c.gray('.'));
-  shell.out('');
-  shell.out(c.gray('  start    ') + c.green('help') + c.gray(' · ') + c.green('ls /skills') + c.gray(' · ') + c.green('whoami') + c.gray(' · ') + c.green('kernel status'));
-  shell.out(c.gray('  systems  ') + c.green('kernel boot real') + c.gray(' (real x86 linux) · ') + c.green('python3') + c.gray(' (real cpython) · ') + c.green('sql "…"'));
-  shell.out(c.gray('  sre      ') + c.green('watch slo') + c.gray('  +  ') + c.green('chaos inject --model lorenz --rho 28') + c.gray('  ·  ') + c.green('chaos inject --ramp') + c.gray(' (tipping-point early warning)'));
-  shell.out(c.gray('  cluster  ') + c.green('helm install demo webapp') + c.gray(' · ') + c.green('kubectl get pods -w') + c.gray('   (a real orchestrator; pods are real threads)'));
-  shell.out(c.gray('  chaos    ') + c.green('lyapunov') + c.gray(' (Lorenz) · ') + c.green('kam') + c.gray(' (KAM tori, standard map) · ') + c.green('induce turbulence') + c.gray(' (measured λ)'));
-  shell.out(c.gray('  labs     ') + c.green('train') + c.gray(' (a neural net learns, live) · ') + c.green('sheaf') + c.gray(' + ') + c.green('glue') + c.gray(' (a real CRDT: diverge, then converge)'));
-  shell.out(c.gray('  code     ') + c.green('source shell.js') + c.gray(' (this site\'s own source) · ') + c.green('git log') + c.gray(' · ') + c.green('edge'));
-  shell.out('');
+/* ── the greeter: AIWASS meets the observer (humble, guiding) ─────── */
+async function greet(shell) {
+  const t = shell.term;
+  const line = (s = '') => t.write(s.replace(/\n/g, '\r\n') + '\r\n');
+  t.write('\r\n');
+  t.write(c.mag('  ◍ aiwass')); await sleep(220);
+  const lines = [
+    '',
+    c.white("  Welcome. I look after this place — I'll point, you explore."),
+    c.gray('  Behind it is the work of a systems engineer: things you can read,'),
+    c.gray('  run, and push on until they bend. Nothing here is a picture of itself.'),
+    '',
+    c.gray('  ▸ want the tour?    ') + c.green('aiwass guide') + c.gray('   — or the buttons below, no typing needed'),
+    c.gray('  ▸ rather wander?    ') + c.green('help') + c.gray('  ·  ') + c.green('ls /skills') + c.gray('  ·  ') + c.green('whoami'),
+    '',
+  ];
+  for (const l of lines) { line(l); await sleep(75); }
+}
+
+/* clickable quick-actions bar → run a command as if typed (the no-typing path) */
+function wireQuickbar(shell, term) {
+  const bar = $('quickbar');
+  if (!bar) return;
+  const run = (cmd) => {
+    if (shell.busy || shell.liveMode || shell.secretMode || shell.submode || shell.mode === 'real') return;
+    term.focus();
+    shell.write(cmd + '\r\n');
+    shell.run(cmd);
+  };
+  bar.querySelectorAll('.qb').forEach((b) => b.addEventListener('click', () => run(b.dataset.cmd)));
+  // the click-only path is for the imaginary kernel; hide it inside real Linux
+  bus.on('mode', ({ mode }) => bar.classList.toggle('hidden', mode === 'real'));
 }
 
 /* ── go ──────────────────────────────────────────────────────────── */
@@ -258,9 +277,10 @@ async function main() {
 
   window.__hermit = { shell, term, fit, bus, state, ctx };
 
-  welcome(shell);
-  shell.prompt();
   term.onData((d) => shell.onKey(d));
+  wireQuickbar(shell, term);
+  await greet(shell);
+  shell.prompt();
   term.focus();
 
   // try to hydrate kernel content from KV (read-only is public)

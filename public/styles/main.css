@@ -120,30 +120,55 @@ html, body {
   .flicker { animation: none; }
 }
 
-/* ── Boot splash ─────────────────────────────────────────────────── */
+/* ── Cinematic entry — resolves from dark, the attractor glimmers behind ── */
 #boot {
   position: fixed; inset: 0; z-index: 80;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(70% 70% at 50% 44%, #070c0e 0%, #030405 100%);
-  transition: opacity .9s cubic-bezier(.4,0,.2,1);
+  /* faintly translucent so the warming attractor shows through as a glow */
+  background: radial-gradient(75% 75% at 50% 44%, rgba(7,12,14,.82) 0%, rgba(3,4,5,.97) 100%);
+  transition: opacity 1s cubic-bezier(.4,0,.2,1);
 }
 #boot.gone { opacity: 0; pointer-events: none; }
-#boot-log {
-  margin: 0;
-  width: min(760px, 90vw);
-  height: min(64vh, 480px);
-  overflow: hidden;
-  font-size: 12.5px;
-  line-height: 1.62;
-  letter-spacing: .2px;
-  color: var(--cyan);
-  text-shadow: var(--glow-cyan);
-  white-space: pre-wrap;
+
+#boot-cine {
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  text-align: center; padding: 0 24px;
 }
-#boot-log .ok   { color: var(--green); }
-#boot-log .warn { color: var(--amber); }
-#boot-log .err  { color: var(--red); }
-#boot-log .dim  { color: var(--text-dim); }
+.cine-mark {
+  font-size: 48px; line-height: 1; color: var(--amber);
+  filter: drop-shadow(0 0 14px rgba(227,169,74,.5));
+  opacity: 0; transform: scale(.82);
+  transition: opacity 1s ease, transform 1.4s cubic-bezier(.2,.8,.2,1);
+}
+.cine-word {
+  font-size: 15px; letter-spacing: 11px; text-indent: 11px; font-weight: 500;
+  color: var(--text-dim); opacity: 0; transform: translateY(4px);
+  transition: opacity 1s ease .1s, transform 1s ease .1s;
+}
+.cine-tag {
+  font-size: 12.5px; letter-spacing: .3px; color: var(--text-faint);
+  max-width: 90vw; opacity: 0; transition: opacity 1.1s ease;
+  min-height: 1em;
+}
+.cine-enter {
+  margin-top: 8px; font: 12px var(--mono); letter-spacing: 1px; cursor: pointer;
+  color: var(--cyan); background: rgba(87,214,204,.05);
+  border: 1px solid rgba(87,214,204,.3); border-radius: 8px; padding: 7px 18px;
+  opacity: 0; transition: opacity .8s ease, background .16s, border-color .16s;
+  animation: enterpulse 2.4s ease-in-out infinite;
+}
+.cine-enter:hover { background: rgba(87,214,204,.14); border-color: var(--cyan); }
+.cine-enter .k { color: var(--text-faint); }
+@keyframes enterpulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(87,214,204,0); } 50%{ box-shadow: 0 0 18px 0 rgba(87,214,204,.14); } }
+
+#boot.reveal .cine-mark { opacity: 1; transform: scale(1); }
+#boot.reveal .cine-word { opacity: 1; transform: none; }
+#boot.reveal .cine-tag  { opacity: 1; }
+#boot.reveal .cine-enter { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .cine-mark, .cine-word, .cine-tag, .cine-enter { transition: opacity .4s ease; transform: none; }
+  .cine-enter { animation: none; }
+}
 
 /* ── Shell layout — the terminal as a framed instrument ──────────── */
 #shell {
@@ -254,6 +279,34 @@ html, body {
 #hint .dim { color: var(--text-dim); }
 #hint .sep { color: var(--text-faint); }
 #hint .tip { color: var(--text-faint); }
+
+/* ── quick-actions bar — the click-only path (a recruiter never types) ── */
+#quickbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--edge);
+  background: linear-gradient(0deg, rgba(9,13,15,.42), rgba(9,13,15,.12));
+}
+#quickbar.hidden { display: none; }
+#quickbar .qb-label {
+  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-faint); margin-right: 3px;
+}
+#quickbar .qb {
+  font: 11.5px var(--mono); letter-spacing: .2px; cursor: pointer;
+  color: var(--text-dim); background: rgba(255,255,255,.02);
+  border: 1px solid var(--edge-strong); border-radius: 8px;
+  padding: 5px 12px; transition: all .16s ease;
+}
+#quickbar .qb:hover {
+  color: var(--cyan); border-color: rgba(87,214,204,.5);
+  background: rgba(87,214,204,.08); box-shadow: var(--glow-cyan);
+}
+#quickbar .qb:active { transform: translateY(1px); }
+@media (max-width: 640px) {
+  #quickbar { flex-wrap: wrap; gap: 6px; padding: 8px 11px; }
+  #quickbar .qb-label { flex-basis: 100%; margin-bottom: 2px; }
+}
 
 /* ── xterm tweaks ────────────────────────────────────────────────── */
 .xterm { height: 100%; padding: 2px; }

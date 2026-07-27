@@ -32,9 +32,14 @@
     <div class="glow"></div>
   </div>
 
-  <!-- ── Boot splash ──────────────────────────────────────────────────── -->
+  <!-- ── Cinematic entry (resolves from dark) ─────────────────────────── -->
   <div id="boot">
-    <pre id="boot-log" aria-live="polite"></pre>
+    <div id="boot-cine">
+      <div class="cine-mark" aria-hidden="true">◍</div>
+      <div class="cine-word">hermit</div>
+      <div class="cine-tag" id="cine-tag"></div>
+      <button id="cine-enter" class="cine-enter" hidden>enter <span class="k">⏎</span></button>
+    </div>
   </div>
 
   <!-- ── Layer 2: the projection (observer terminal) ──────────────────── -->
@@ -64,6 +69,14 @@
           <pre id="kernel-stream"></pre>
         </aside>
       </div>
+
+      <nav id="quickbar" aria-label="quick actions — no typing required">
+        <span class="qb-label">start ▸</span>
+        <button class="qb" data-cmd="aiwass guide">show me around</button>
+        <button class="qb" data-cmd="ls /skills">the work</button>
+        <button class="qb" data-cmd="kernel boot real">real linux</button>
+        <button class="qb" data-cmd="help">everything</button>
+      </nav>
 
       <footer id="hint">
         <span class="dim">observer attached.</span>
