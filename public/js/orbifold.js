@@ -71,6 +71,9 @@ export class Orbifold {
     this.cam = { yaw: 0, pitch: 0.25, dragging: false, lx: 0, ly: 0, vyaw: 0.06 };
     this.tapJitter = 0;          // brief ripple on each command the user runs
     this.wasStressed = false;    // for the auto-recover-after-chaos settle
+    this.seedB = 0;              // per-observer dissipation offset (collapse)
+    this.spinDir = 1;            // per-observer idle spin direction
+    this.obsEnergy = 0;          // how active the observer is right now (watch)
 
     // particle state (integrated on the CPU, drawn on the GPU)
     this.pos = new Float32Array(N_MAX * 3);
@@ -157,6 +160,10 @@ export class Orbifold {
       if (mode === 'reset') { this.tgt.turb = 0; this.cam.yaw = 0; this.cam.pitch = 0.25; }
       if (mode === 'spin') { this.cam.vyaw = 0.7; }
     });
+    // observer-collapse: this instance's attractor is seeded from real entropy
+    b.on('observer:ready', ({ instance }) => this.applySeed(instance));
+    // watch: the field is livelier when the observer is
+    b.on('observer:energy', ({ e }) => { this.obsEnergy = Math.max(0, Math.min(1, e || 0)); });
     b.on('chaos:fail', () => { this.tgt.chaos = 1; this.cur.chaos = 1; });
     b.on('chaos:recover', () => { this.tgt.chaos = 0; this.cur.recover = 1; this.tgt.recover = 0; });
     // honest: field turbulence ∝ REAL injected-fault severity
@@ -183,6 +190,21 @@ export class Orbifold {
   }
 
   pulse() { this.cur.pulse = 1; }
+
+  // collapse this instance: seed the camera, spin, dissipation and palette from
+  // the observer's real entropy — so no two visitors see the same attractor.
+  applySeed(inst) {
+    if (!inst || !inst.params) return;
+    const p = inst.params;
+    this.cam.yaw = p.camYaw || 0;
+    this.cam.pitch = Math.max(-1.1, Math.min(1.1, p.camPitch || 0.25));
+    this.spinDir = p.spin || 1;
+    this.cam.vyaw = 0.06 * this.spinDir;
+    this.seedB = p.bJit || 0;
+    const rot = (col, dh) => { const hsl = {}; col.getHSL(hsl); col.setHSL((hsl.h + dh + 1) % 1, hsl.s, hsl.l); };
+    rot(this.uniforms.uColA.value, p.hue || 0);
+    rot(this.uniforms.uColB.value, p.hue || 0);
+  }
 
   // is a full-screen lab covering the field? then don't waste the GPU on it
   occluded() {
@@ -259,7 +281,7 @@ export class Orbifold {
     // violent; a recover briefly raises dissipation so the field visibly
     // settles (a green "healing") before relaxing back to baseline.
     const stress = Math.max(0, Math.min(1, this.cur.turb + this.cur.chaos * 0.5));
-    const b = B_BASE - 0.03 * stress + this.cur.recover * 0.13;
+    const b = B_BASE + this.seedB - 0.03 * stress + this.cur.recover * 0.13;
     const jitter = stress * 0.008 + this.tapJitter;       // turbulence + per-command ripple
     this.tapJitter *= Math.pow(0.05, dt);                 // the command ripple fades fast
     this.integrate(dt, b, jitter);
@@ -278,10 +300,11 @@ export class Orbifold {
       (tr * 0.30 + tg * 0.42 + ta * 0.15) / sum,
     );
     u.uTintAmt.value = tintAmt;
-    u.uBright.value = 0.85 + this.cur.pulse * 0.9 + stress * 0.15;
+    u.uBright.value = 0.85 + this.cur.pulse * 0.9 + stress * 0.15 + this.obsEnergy * 0.12;
 
-    // camera orbit (idle auto-rotate + drag inertia)
-    this.cam.yaw += this.cam.vyaw * 0.016 + 0.0016;
+    // camera orbit (idle auto-rotate + drag inertia); the idle drift follows the
+    // seeded direction and quickens a touch when the observer is active.
+    this.cam.yaw += this.cam.vyaw * 0.016 + 0.0016 * this.spinDir * (1 + this.obsEnergy * 1.2);
     this.cam.vyaw *= 0.97;
     const pit = Math.max(-1.2, Math.min(1.2, this.cam.pitch));
     const R = 15;

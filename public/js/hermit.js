@@ -5,6 +5,7 @@
 
 import { c } from './shell.js';
 import { benettinLorenz, RHO_CRIT } from './dynamics.js';
+import { observerReadout } from './observer.js';
 
 export function hermitCommands(core, send) {
   return {
@@ -16,14 +17,18 @@ export function hermitCommands(core, send) {
           return send(c.amber('baseline collapse requested. the projection trembles but holds — bounded output, by design.'), ctx, piped);
         }
         const g = (0).toFixed(6);
-        const i = (Math.random()).toFixed(6);
+        // the "internal state" is no longer faked — it is the REAL interior
+        // energy the watch has measured off you (see `observer`).
+        const o = ctx.state.observer;
+        const i = (o ? o.internal : 0).toFixed(6);
         ctx.bus.emit('orbifold:pulse', { kind: 'observe' });
         return send([
           c.cyan('observable measurement'),
           `  observable_value ...... ${c.green('const')}`,
           `  observed_gradient ..... ${c.green(g)}  ${c.gray('(clamped; Lipschitz L=1)')}`,
-          `  internal_state ........ ${c.amber(i)}  ${c.gray('(sampled, not emitted — you are not meant to see this)')}`,
+          `  internal_state ........ ${c.amber(i)}  ${c.gray('(your own measured interior energy — real, sampled live)')}`,
           c.gray('  the act of observing perturbs the interior but not the projection.'),
+          c.gray('  the interior is reading you back — ') + c.green('observer') + c.gray(' shows what it has measured.'),
         ].join('\n'), ctx, piped);
       },
     },
@@ -79,6 +84,14 @@ export function hermitCommands(core, send) {
         t.write(c.gray('  nearby interior states diverge exponentially. the interior is turbulent; the ') + c.green('observable stays bounded') + c.gray('.') + '\r\n');
         t.write(c.gray('  quiesce with ') + c.green('chaos recover') + c.gray('  ·  see it in phase space with ') + c.green('lyapunov') + c.gray('.') + '\r\n');
         return '';
+      },
+    },
+
+    observer: {
+      desc: 'the projection reads you back — this instance + what it has measured',
+      run(args, ctx, piped) {
+        ctx.bus.emit('orbifold:pulse', { kind: 'observer' });
+        return send(observerReadout(ctx), ctx, piped);
       },
     },
 

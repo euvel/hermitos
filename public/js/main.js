@@ -8,6 +8,7 @@ import { Bus } from './bus.js';
 import { Orbifold } from './orbifold.js';
 import { Shell, c } from './shell.js';
 import { buildRegistry } from './commands.js';
+import { initObserver } from './observer.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -162,10 +163,13 @@ function wireStatus() {
   // complex-terminal mode indicator (ℝ real Linux · 𝑖 imaginary résumé kernel)
   bus.on('mode', ({ mode }) => { state.mode = mode; paintMode(); });
 
-  // show the real Cloudflare PoP serving this request, once known
-  fetch('/api/whereami').then(r => r.ok ? r.json() : null).then(d => {
-    if (d && d.edge && d.colo) sEdge.textContent = d.colo;
-  }).catch(() => {});
+  // the observer field owns the single /api/whereami fetch; when the instance
+  // collapses, surface the real PoP and a quiet instance signature in the bar
+  const sInst = $('status-inst');
+  bus.on('observer:ready', ({ instance }) => {
+    if (instance.edge && instance.edge.colo) sEdge.textContent = instance.edge.colo;
+    if (sInst && instance.id) sInst.textContent = '#' + instance.id;
+  });
 
   bus.on('turbulence', ({ on }) => {
     led.classList.toggle('unstable', on);
@@ -254,6 +258,9 @@ async function main() {
   new Orbifold($('orbifold'), bus, state);
   wireStatus();
   startKernelStream();
+  // the observer field starts watching immediately — dwell counts from the
+  // entry screen — and collapses this instance's seed (fed to the attractor)
+  initObserver({ bus, state });
 
   await boot();
 

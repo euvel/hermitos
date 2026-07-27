@@ -82,7 +82,7 @@ const core = {
         'dev (real)': ['python3', 'source', 'git', 'sql', 'ci', 'deploy'],
         'labs':       ['train'],
         'intelligence': ['aiwass'],
-        'systems':    ['kernel', 'dissociate', 'induce', 'orbifold', 'kam', 'sheaf', 'glue'],
+        'systems':    ['kernel', 'observer', 'observe', 'dissociate', 'induce', 'orbifold', 'kam', 'sheaf', 'glue'],
         'devops':     ['chaos', 'lyapunov', 'watch', 'kubectl', 'helm'],
         'kernel':     ['kernel', 'sudo', 'su'],
         'misc':       ['echo', 'clear', 'history', 'man', 'neofetch', 'banner', 'cowsay', 'fortune', 'base64', 'sha256sum', 'exit'],

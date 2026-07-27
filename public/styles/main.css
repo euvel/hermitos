@@ -210,6 +210,7 @@ html, body {
 #topbar .dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 #topbar .dots i:hover { background: rgba(255,255,255,.16); }
 #topbar .hostid { color: var(--amber); text-shadow: var(--glow-amber); letter-spacing: 3px; font-weight: 700; font-size: 12.5px; }
+#topbar .inst { color: var(--text-faint); font-size: 11px; letter-spacing: .5px; cursor: default; }
 #topbar .rule { width: 1px; height: 15px; background: var(--edge-strong); margin: 0 2px; }
 #topbar .ctx { color: var(--cyan); letter-spacing: .4px; }
 #topbar .sep { color: var(--text-faint); }
