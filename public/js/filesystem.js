@@ -92,7 +92,7 @@ glue --local /devops /linux
 induce turbulence
 dissociate
 aiwass ask "is the baseline real"
-chaos apply --blast-radius node
+chaos inject --ramp
 journalctl -u euvel --since boot
 # (history truncated: most commands trapped in invariant set)`,
         '-rw-------'),
@@ -129,7 +129,7 @@ END:VCARD`),
   - Progressive delivery: Argo Rollouts, canary, blue/green, flagger
   - Mesh: Istio / Linkerd — mTLS, traffic mirroring, fault injection
   - Autoscaling: HPA/VPA/KEDA, cluster-autoscaler, Karpenter
-  try: 'kubectl get pods'  ·  'kubectl simulate failure'  ·  'helm chaos'`),
+  try: 'kubectl get pods -w'  ·  'helm install demo webapp'  ·  'chaos node'`),
       'chaos.engineering': F(
 `CHAOS ENGINEERING  █████████████ expert
   - Hypothesis-driven failure injection; steady-state verification
@@ -137,7 +137,7 @@ END:VCARD`),
   - Game days, blast-radius control, automated rollback gates
   - Resilience as an *observable*: SLO error budgets as control signal
   PHILOSOPHY: a system you cannot break on purpose, you do not understand.
-  try: 'chaos apply --blast-radius node'  ·  'chaos status'  ·  'chaos revert'`),
+  try: 'chaos inject --ramp'  ·  'chaos node'  ·  'watch slo'  ·  'chaos recover'`),
       'iac.terraform': F(
 `INFRASTRUCTURE AS CODE  ████████████░ expert
   - Terraform / OpenTofu modules, workspaces, remote state, drift control

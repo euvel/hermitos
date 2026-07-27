@@ -115,7 +115,7 @@ export class Shell {
     // support ';' sequencing and basic '|' to grep/less are handled in-command
     const segments = splitTop(trimmed, ';');
     // the background field answers every command with a reactive tap
-    try { const n0 = parse(segments[0].split('|')[0].trim()).name; this.ctx.bus && this.ctx.bus.emit('orbifold:cmd', { weight: cmdWeight(n0), name: n0 }); } catch (_) {}
+    try { const n0 = parse(segments[0].split('|')[0].trim()).name; this.ctx.bus && this.ctx.bus.emit('orbifold:cmd', { weight: cmdWeight(n0), name: n0, known: !!this.registry[n0] }); } catch (_) {}
     this.busy = true;
     for (const seg of segments) {
       await this.execOne(seg.trim());

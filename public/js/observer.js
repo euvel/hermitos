@@ -109,9 +109,13 @@ export function initObserver(ctx) {
   // ── watch (client-only; nothing sent, no PII) ──
   let lastActivity = performance.now(), lastKey = 0, lastPtr = 0, px = 0, py = 0;
   const active = () => { lastActivity = performance.now(); };
-  window.addEventListener('keydown', () => {
+  window.addEventListener('keydown', (e) => {
     const now = performance.now();
-    if (lastKey) { const dt = now - lastKey; obs.f.hesEMA = obs.f.hesEMA ? obs.f.hesEMA * 0.85 + dt * 0.15 : dt; }
+    // rhythm = real typing cadence within a line: skip Enter (it starts a new
+    // line) and think-pauses (> 2s) so the number reflects keystroke speed, not
+    // the time spent deciding what to run.
+    if (e.key === 'Enter') { lastKey = 0; obs.f.keys++; active(); return; }
+    if (lastKey) { const dt = now - lastKey; if (dt < 2000) obs.f.hesEMA = obs.f.hesEMA ? obs.f.hesEMA * 0.8 + dt * 0.2 : dt; }
     lastKey = now; obs.f.keys++; active();
   }, { passive: true });
   window.addEventListener('pointermove', (e) => {
@@ -121,11 +125,12 @@ export function initObserver(ctx) {
   }, { passive: true });
   window.addEventListener('pointerdown', () => { obs.f.clicks++; active(); }, { passive: true });
 
-  // real command traffic → variety + reach (shell tags each run with its name)
-  bus.on('orbifold:cmd', ({ name }) => {
-    if (!name) return;
+  // real command traffic → variety + reach (shell tags each run with name + whether it exists)
+  bus.on('orbifold:cmd', ({ name, known }) => {
+    active();
+    if (!name || known === false) return;    // typos are activity, but not a command run
     obs.f.cmds++; obs.f.cmdCounts[name] = (obs.f.cmdCounts[name] || 0) + 1;
-    obs.f.areas.add(areaOf(name)); active();
+    obs.f.areas.add(areaOf(name));
   });
   bus.on('mode', ({ mode }) => { if (mode === 'real') obs.f.areas.add('real-linux'); });
   bus.on('elevate', ({ on }) => { if (on) obs.f.areas.add('kernel'); });

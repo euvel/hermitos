@@ -109,11 +109,13 @@ async function ask(ctx, question) {
 }
 
 function snapshot(ctx) {
+  const o = ctx.state.observer;
   return {
     cwd: ctx.shell.cwd,
     turbulence: !!ctx.state.turbulence,
     dissociated: !!ctx.state.dissociated,
     blast: ctx.state.blast || 'none',
+    observerClass: o ? o.class : null,
   };
 }
 
@@ -132,9 +134,15 @@ function localAiwass(q, ctx) {
   }
   if (match(['devops', 'kubernetes', 'k8s', 'chaos', 'sre', 'terraform', 'ci', 'cd', 'infra'])) {
     return 'Euvel treats operations as a dynamical system: the SLO is the observable, the error budget is a control ' +
-      'signal, and resilience is proven by breaking things on purpose. Try `chaos apply --blast-radius node` and watch ' +
-      'the orbifold shed and reschedule load while the baseline stays const. Read /skills/devops for the full surface: ' +
-      'Kubernetes operators, GitOps, eBPF observability, progressive delivery.' + tail;
+      'signal, and resilience is proven by breaking things on purpose. Try `watch slo` alongside `chaos inject --ramp` ' +
+      'and watch it warn before it tips; or `chaos node` to kill a cluster node and see it reschedule. Read the surface: ' +
+      '`cat /skills/devops/chaos.engineering` · `cat /skills/devops/observability.sre`.' + tail;
+  }
+  if (match(['observer', 'watch', 'collapse', 'instance', 'watching', 'privacy'])) {
+    return 'The `observer` command shows how this instance was collapsed — seeded from real entropy (the edge PoP/ASN/TLS ' +
+      'serving you, your device, session, and input rhythm), unrepeatable and gone when you close the tab — and what the ' +
+      'field has measured off you (dwell, command variety, rhythm) to read your "class". It is all in-browser: nothing is ' +
+      'sent, no PII, nothing stored. Run `observer`.' + tail;
   }
   if (match(['linux', 'kernel', 'ebpf', 'trace', 'namespace', 'cgroup', 'perf'])) {
     return 'The kernel is home. Namespaces, cgroups v2, seccomp-bpf, eBPF authoring with bpftrace, latency archaeology ' +
@@ -159,7 +167,7 @@ function localAiwass(q, ctx) {
   }
   if (match(['help', 'lost', 'what can i', 'start', 'guide', 'explore'])) {
     return 'Start by reading the permitted observables: `ls /skills`, then `cat /skills/devops/chaos.engineering`. ' +
-      'Perturb the system: `chaos apply`, `induce turbulence`, `kam perturb`.' +
+      'Perturb the system: `chaos inject --ramp`, `induce turbulence`, `kam`. Boot a whole Linux with `kernel boot real`. ' +
       'Ask me anything in the form `aiwass ask "..."`. I am a guide, not an oracle: I will point, not carry.' + tail;
   }
   // generic

@@ -237,6 +237,29 @@ async function greet(shell) {
   for (const l of lines) { line(l); await sleep(75); }
 }
 
+/* one gentle, behaviour-aware nudge for a visitor who arrived and then went
+   quiet — AIWASS guiding proactively. Fires at most once, only if they haven't
+   run anything, and never while they're mid-action. */
+const NUDGE = {
+  recruiter: 'no need to type — the buttons below open the work, or ask me: aiwass ask "what has Euvel actually run?"',
+  reader:    'want the person behind the record? try whoami · cat /home/euvel/manifesto.txt · or ask me anything.',
+  default:   'still here? the buttons below run things without typing — or ask me: aiwass ask "where do I start?"',
+};
+function wireProactive(shell, term) {
+  let done = false;
+  const canSpeak = () => !done && !shell.busy && !shell.liveMode && !shell.secretMode && !shell.submode
+    && shell.mode === 'imaginary' && shell.buf === '' && !document.hidden;
+  setTimeout(() => {
+    const o = state.observer;
+    if (o && o.f.cmds > 0) { done = true; return; }   // they've engaged — no nudge
+    if (!canSpeak()) return;
+    done = true;
+    const msg = NUDGE[o && o.class] || NUDGE.default;
+    term.write('\r\n' + c.mag('  ◍ ') + c.gray(msg) + '\r\n');
+    shell.prompt();
+  }, 28000);
+}
+
 /* clickable quick-actions bar → run a command as if typed (the no-typing path) */
 function wireQuickbar(shell, term) {
   const bar = $('quickbar');
@@ -289,6 +312,7 @@ async function main() {
   await greet(shell);
   shell.prompt();
   term.focus();
+  wireProactive(shell, term);
 
   // try to hydrate kernel content from KV (read-only is public)
   try {

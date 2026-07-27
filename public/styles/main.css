@@ -446,7 +446,7 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
   position: fixed; inset: 0; z-index: 90;
   display: flex; flex-direction: column;
   background:
-    radial-gradient(120% 80% at 20% 0%, #0a1018 0%, #05080e 55%, #03060b 100%);
+    radial-gradient(120% 80% at 20% 0%, #0a0e10 0%, #060809 55%, #040506 100%);
   color: var(--text); animation: vmin .28s cubic-bezier(.2,.8,.2,1);
   font-size: 12px;
 }
@@ -471,8 +471,8 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
   grid-template-columns: 260px 1fr 320px; gap: 14px; padding: 14px 18px 18px;
 }
 .nn-panel {
-  background: linear-gradient(180deg, rgba(14,20,28,.55), rgba(10,15,22,.4));
-  border: 1px solid rgba(255,255,255,.06); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(15,20,22,.5), rgba(10,14,16,.38));
+  border: 1px solid var(--edge); border-radius: 12px;
   padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
 }
 .nn-h { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--text-dim); margin-top: 4px; display: flex; justify-content: space-between; align-items: baseline; }
@@ -489,8 +489,8 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 .nn-seg button.on { background: linear-gradient(180deg, rgba(53,224,214,.18), rgba(53,224,214,.06)); color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 14px rgba(53,224,214,.15); }
 
 .nn-range { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 3px; background: rgba(255,255,255,.1); outline: none; }
-.nn-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(53,224,214,.6); cursor: pointer; border: 2px solid #04060a; }
-.nn-range::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--cyan); border: 2px solid #04060a; cursor: pointer; }
+.nn-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(53,224,214,.6); cursor: pointer; border: 2px solid var(--void); }
+.nn-range::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--cyan); border: 2px solid var(--void); cursor: pointer; }
 
 .nn-ctl { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .nn-btn { font: 11px var(--mono); cursor: pointer; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 7px; padding: 8px; transition: all .14s; }
@@ -518,7 +518,7 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 
 /* right: insights */
 .nn-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.nn-card { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 10px; padding: 10px 12px; }
+.nn-card { background: rgba(255,255,255,.025); border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px; }
 .nn-card span { display: block; font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-dim); }
 .nn-card b { display: block; margin-top: 4px; font-size: 21px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
 
@@ -551,7 +551,7 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 
 /* ── dynamical-systems lab (Lorenz / Lyapunov) ───────────────────── */
 #ly-overlay { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
-  background: radial-gradient(120% 80% at 80% 0%, #0a1018 0%, #05080e 55%, #02050a 100%); color: var(--text); font-size: 12px; animation: vmin .28s ease; }
+  background: radial-gradient(120% 80% at 80% 0%, #0a0e10 0%, #060809 55%, #040506 100%); color: var(--text); font-size: 12px; animation: vmin .28s ease; }
 #ly-top { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(8,12,18,.5); }
 .ly-brand { font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--cyan); display: flex; align-items: center; gap: 9px; font-size: 13px; }
 .ly-brand .ly-sub { font-weight: 400; letter-spacing: .3px; text-transform: none; color: var(--text-dim); font-size: 11px; }
@@ -560,16 +560,16 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 .ly-x { font: 11px var(--mono); cursor: pointer; color: var(--text-dim); background: transparent; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: 5px 11px; }
 .ly-x:hover { color: #fff; border-color: rgba(255,255,255,.3); }
 #ly-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px 1fr; gap: 14px; padding: 14px 18px 18px; }
-.ly-panel { background: linear-gradient(180deg, rgba(14,20,28,.55), rgba(10,15,22,.4)); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
+.ly-panel { background: linear-gradient(180deg, rgba(15,20,22,.5), rgba(10,14,16,.38)); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
 .ly-h { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--text-dim); margin-top: 4px; display: flex; justify-content: space-between; align-items: baseline; }
 .ly-hv { color: var(--cyan); }
 .ly-kv { display: flex; justify-content: space-between; font-size: 11px; }
 .ly-kv span { color: var(--text-dim); } .ly-kv b { color: var(--text); font-variant-numeric: tabular-nums; }
-.ly-metric { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 8px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 8px; }
+.ly-metric { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 8px; background: rgba(255,255,255,.025); border: 1px solid var(--edge); border-radius: 8px; }
 .ly-metric span { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--text-dim); }
 .ly-metric b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ly-range { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 3px; background: rgba(255,255,255,.1); outline: none; }
-.ly-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(79,214,204,.6); cursor: pointer; border: 2px solid #04060a; }
+.ly-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(79,214,204,.6); cursor: pointer; border: 2px solid var(--void); }
 .ly-pre-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
 .ly-pre, .ly-btn { font: 11px var(--mono); cursor: pointer; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 7px; padding: 6px 4px; }
 .ly-pre:hover, .ly-btn:hover { border-color: rgba(79,214,204,.5); color: var(--cyan); }
@@ -587,7 +587,7 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 
 /* KAM standard-map lab — reuses the .ly-* children, mirrors the ly layout */
 #km-overlay { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
-  background: radial-gradient(120% 80% at 80% 0%, #0a1018 0%, #05080e 55%, #02050a 100%); color: var(--text); font-size: 12px; animation: vmin .28s ease; }
+  background: radial-gradient(120% 80% at 80% 0%, #0a0e10 0%, #060809 55%, #040506 100%); color: var(--text); font-size: 12px; animation: vmin .28s ease; }
 #km-top { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(8,12,18,.5); }
 #km-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px 1fr; gap: 14px; padding: 14px 18px 18px; }
 #km-att { width: 100%; height: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 0 60px rgba(79,214,204,.07); display: block; background: #02040a; }

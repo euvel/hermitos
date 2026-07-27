@@ -712,14 +712,15 @@ const MANPAGES = {
   chaos: (c) => [
     c.amber('CHAOS(8)') + '                HERMIT-OS DevOps                ' + c.amber('CHAOS(8)'),
     '',
-    '       chaos apply  [--blast-radius pod|node|zone]   inject failure',
-    '       chaos status                                  steady-state check',
-    '       chaos revert                                  restore + heal',
-    '       kubectl simulate failure                      pod-level chaos',
-    '       helm chaos                                    chart-driven chaos',
+    '       chaos inject --ramp                walk latency toward a tipping point',
+    '       chaos inject --model lorenz --rho 28   structured chaotic latency',
+    '       chaos inject --latency 300ms | --errors 25%   flat global fault',
+    '       chaos node [COLO]                  kill a cluster node; watch it reschedule',
+    '       chaos recover                      quiesce + heal',
+    '       chaos status                       steady-state check',
     '',
-    '       Failures render in the orbifold as metric degeneracy and node',
-    '       collapse, then resilient recovery. The projection never drops.',
+    '       Faults are REAL: injectors drive a latency the edge actually sleeps',
+    '       for; `watch slo` measures the response and warns before it breaches.',
   ].join('\n'),
 };
 
