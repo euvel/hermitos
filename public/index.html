@@ -4,9 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="hermit — an interactive systems terminal: real Linux (v86), real Python (WASM), real edge SQL, chaos engineering, and a live neural-net training lab, in the browser." />
-  <meta name="theme-color" content="#04060a" />
+  <meta name="theme-color" content="#050708" />
   <meta name="color-scheme" content="dark" />
   <title>hermit — interactive systems terminal</title>
+
+  <!-- self-hosted typeface (JetBrains Mono, OFL) — preloaded to avoid reflow -->
+  <link rel="preload" href="/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/jetbrains-mono-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
 
   <!-- xterm.js (terminal) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
@@ -35,35 +39,41 @@
 
   <!-- ── Layer 2: the projection (observer terminal) ──────────────────── -->
   <main id="shell" hidden>
-    <header id="topbar">
-      <span class="led" id="led-power" title="baseline observable"></span>
-      <span class="hostid">hermit</span>
-      <span class="sep">::</span>
-      <span class="mono" id="status-metric">systems: nominal</span>
-      <span class="sep">::</span>
-      <span class="mono" id="status-info">edge: ready</span>
-      <span class="grow"></span>
-      <span class="mono dim" id="status-load">load 0.00 0.00 0.00</span>
-      <button id="btn-dissociate" class="chip" title="dissociate (split view)">dissociate</button>
-    </header>
+    <div id="frame">
+      <header id="topbar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="led" id="led-power" title="baseline observable"></span>
+        <span class="hostid">hermit</span>
+        <span class="rule" aria-hidden="true"></span>
+        <span class="mono ctx" id="status-info">imaginary</span>
+        <span class="grow"></span>
+        <span class="mono dim" id="status-edge"></span>
+        <span class="sep">·</span>
+        <span class="mono dim" id="status-metric">nominal</span>
+        <span class="sep">·</span>
+        <span class="mono dim" id="status-load">load 0.00 0.00 0.00</span>
+        <button id="btn-dissociate" class="chip" title="dissociate — split the observer from the interior">dissociate</button>
+      </header>
 
-    <div id="split">
-      <section id="term-pane">
-        <div id="terminal"></div>
-      </section>
-      <aside id="kernel-pane" hidden>
-        <div class="kernel-head">alter[3] · the kernel — live interior telemetry (real event bus · scheduler · heap)</div>
-        <pre id="kernel-stream"></pre>
-      </aside>
+      <div id="split">
+        <section id="term-pane">
+          <div id="terminal"></div>
+        </section>
+        <aside id="kernel-pane" hidden>
+          <div class="kernel-head">alter[3] · the kernel — live interior telemetry (real event bus · scheduler · heap)</div>
+          <pre id="kernel-stream"></pre>
+        </aside>
+      </div>
+
+      <footer id="hint">
+        <span class="dim">observer attached.</span>
+        <span class="hint-msg">explore freely — <code>help</code> for the map, or just <code>aiwass</code> to be shown around</span>
+        <span class="grow"></span>
+        <span class="dim tip">right-drag orbits the interior</span>
+        <span class="sep">·</span>
+        <span class="dim" id="fps">--</span>
+      </footer>
     </div>
-
-    <footer id="hint">
-      <span class="dim">external observer attached.</span>
-      try <code>help</code> · <code>aiwass guide</code> · <code>man hermit</code>
-      <span class="dim">· right-drag to orbit the orbifold</span>
-      <span class="grow"></span>
-      <span class="dim" id="fps">--</span>
-    </footer>
   </main>
 
   <!-- xterm.js + addons -->

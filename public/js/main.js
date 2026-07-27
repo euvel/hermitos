@@ -54,21 +54,23 @@ async function boot() {
 /* ── terminal ────────────────────────────────────────────────────── */
 function makeTerminal() {
   const term = new window.Terminal({
-    fontFamily: 'DejaVu Sans Mono, JetBrains Mono, Menlo, monospace',
+    fontFamily: '"JetBrains Mono", "SF Mono", "DejaVu Sans Mono", Menlo, monospace',
     fontSize: 14,
-    lineHeight: 1.2,
+    lineHeight: 1.25,
+    letterSpacing: 0,
     cursorBlink: true,
     cursorStyle: 'bar',
+    cursorWidth: 2,
     allowProposedApi: true,
     theme: {
       background: 'rgba(0,0,0,0)',
-      foreground: '#cdd9d5',
-      cursor: '#4fd6cc',
-      cursorAccent: '#010204',
-      selectionBackground: 'rgba(79,214,204,0.22)',
-      black: '#010204', red: '#ff5d5d', green: '#6fe06a', yellow: '#e6a83c',
-      blue: '#4fd6cc', magenta: '#d96fe0', cyan: '#4fd6cc', white: '#cdd9d5',
-      brightBlack: '#8aa09b',
+      foreground: '#d6ddda',
+      cursor: '#57d6cc',
+      cursorAccent: '#050708',
+      selectionBackground: 'rgba(87,214,204,0.24)',
+      black: '#050708', red: '#ff6b6b', green: '#74dd6f', yellow: '#e3a94a',
+      blue: '#57d6cc', magenta: '#cf8fd6', cyan: '#57d6cc', white: '#d6ddda',
+      brightBlack: '#86988f',
     },
   });
   const fit = new window.FitAddon.FitAddon();
@@ -134,32 +136,40 @@ function startKernelStream() {
 function wireStatus() {
   const led = $('led-power');
   const sMetric = $('status-metric');
-  const sInfo = $('status-info');
+  const sInfo = $('status-info');       // ctx slot: the kernel mode (𝑖 / ℝ / ℂ / kernel)
+  const sEdge = $('status-edge');       // real Cloudflare PoP, independent of mode
   const sLoad = $('status-load');
   const fpsEl = $('fps');
+
+  // the mode readout, kept in one place so events don't clobber the edge PoP
+  const paintMode = () => {
+    if (state.elevated) { sInfo.textContent = 'kernel'; sInfo.style.color = '#ff6b6b'; return; }
+    sInfo.style.color = '';
+    sInfo.textContent = state.mode === 'real'
+      ? 'ℝ real'
+      : (state.published ? 'ℂ complex' : '𝑖 imaginary');
+  };
+  paintMode();
 
   bus.on('fps', ({ fps }) => { fpsEl.textContent = fps + ' fps'; });
 
   // complex-terminal mode indicator (ℝ real Linux · 𝑖 imaginary résumé kernel)
-  bus.on('mode', ({ mode }) => {
-    sInfo.textContent = mode === 'real' ? 'mode: ℝ real linux' : (state.published ? 'mode: 𝑖 imaginary (ℂ)' : 'mode: 𝑖 imaginary');
-    sInfo.style.color = mode === 'real' ? '#4fd6cc' : '';
-  });
+  bus.on('mode', ({ mode }) => { state.mode = mode; paintMode(); });
 
   // show the real Cloudflare PoP serving this request, once known
   fetch('/api/whereami').then(r => r.ok ? r.json() : null).then(d => {
-    if (d && d.edge && d.colo && !state.elevated) sInfo.textContent = `edge: ${d.colo}`;
+    if (d && d.edge && d.colo) sEdge.textContent = d.colo;
   }).catch(() => {});
 
   bus.on('turbulence', ({ on }) => {
     led.classList.toggle('unstable', on);
-    sMetric.textContent = on ? 'systems: turbulent' : 'systems: nominal';
+    sMetric.textContent = on ? 'turbulent' : 'nominal';
+    sMetric.style.color = on ? 'var(--red)' : '';
     $('shell').classList.toggle('turbulent', on);
   });
   bus.on('elevate', ({ on }) => {
-    sInfo.textContent = on ? 'mode: kernel' : 'edge: ready';
-    sInfo.style.color = on ? '#ff4d4d' : '';
-    document.documentElement.style.setProperty('--led', on ? '#ff4d4d' : '');
+    state.elevated = on; paintMode();
+    document.documentElement.style.setProperty('--led', on ? '#ff6b6b' : '');
   });
 
   // REAL main-thread load average: three EMAs of measured event-loop
@@ -227,6 +237,17 @@ async function main() {
   startKernelStream();
 
   await boot();
+
+  // ensure the real typeface is loaded before xterm measures cell metrics
+  try {
+    if (document.fonts && document.fonts.load) {
+      await Promise.all([
+        document.fonts.load('400 14px "JetBrains Mono"'),
+        document.fonts.load('700 14px "JetBrains Mono"'),
+      ]);
+      await document.fonts.ready;
+    }
+  } catch (_) {}
 
   const { term, fit } = makeTerminal();
   const ctx = { bus, state, term };

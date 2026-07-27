@@ -1,26 +1,55 @@
 /* ===================================================================
    HERMIT-OS — observer projection stylesheet
-   Dark void · amber/cyan/green mathematical minimalism
+   Luxe dark terminal · an instrument in a gallery
+   amber/cyan/green over a warm near-black, restrained motion
    =================================================================== */
 
+/* ── self-hosted typeface (JetBrains Mono, OFL) ──────────────────── */
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 400;
+  font-display: swap; src: url("/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 500;
+  font-display: swap; src: url("/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 700;
+  font-display: swap; src: url("/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2");
+}
+
 :root {
-  --void:        #010204;
-  --void-2:      #04070c;
-  --ink:         #070b11;
-  --amber:       #e6a83c;
-  --amber-dim:   #9c742a;
-  --cyan:        #4fd6cc;
-  --cyan-dim:    #2a8b85;
-  --green:       #6fe06a;
-  --green-dim:   #3a8c34;
-  --magenta:     #d96fe0;
-  --red:         #ff5d5d;
-  --text:        #cdd9d5;
-  --text-dim:    #8aa09b;
-  --grid:        rgba(79, 214, 204, 0.06);
-  --glow-cyan:   0 0 4px rgba(79,214,204,.35);
-  --glow-amber:  0 0 4px rgba(230,168,60,.35);
-  --mono: "DejaVu Sans Mono", "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* depth — a warm, true near-black rather than blue-black */
+  --void:        #050708;
+  --void-2:      #080b0d;
+  --ink:         #0a0e10;
+  --panel:       rgba(13, 18, 20, 0.55);
+  --panel-2:     rgba(16, 22, 24, 0.72);
+
+  /* hairlines & elevation */
+  --edge:        rgba(128, 158, 152, 0.10);
+  --edge-strong: rgba(128, 158, 152, 0.20);
+  --shadow-lg:   0 40px 120px rgba(0,0,0,.62), 0 8px 30px rgba(0,0,0,.5);
+
+  /* accents — refined, slightly desaturated for an expensive read */
+  --amber:       #e3a94a;
+  --amber-dim:   #9c7a34;
+  --cyan:        #57d6cc;
+  --cyan-dim:    #2f8f88;
+  --green:       #74dd6f;
+  --green-dim:   #3d8f38;
+  --magenta:     #cf8fd6;
+  --red:         #ff6b6b;
+
+  /* neutral text ramp */
+  --text:        #d6ddda;
+  --text-dim:    #86988f;
+  --text-faint:  #56655f;
+
+  --grid:        rgba(87, 214, 204, 0.05);
+  --glow-cyan:   0 0 5px rgba(87,214,204,.28);
+  --glow-amber:  0 0 5px rgba(227,169,74,.28);
+  --mono: "JetBrains Mono", "SF Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -31,8 +60,10 @@ html, body {
   background: var(--void);
   color: var(--text);
   font-family: var(--mono);
+  font-feature-settings: "tnum" 1, "calt" 0;   /* tabular figures; steady columns */
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* ── Orbifold canvas ─────────────────────────────────────────────── */
@@ -44,70 +75,67 @@ html, body {
   display: block;
   z-index: 0;
   background:
-    radial-gradient(120% 90% at 50% 0%, #070d16 0%, var(--void) 55%, #020306 100%);
+    radial-gradient(130% 100% at 50% -10%, #0a1114 0%, var(--void) 52%, #030405 100%);
 }
 
-/* ── CRT overlays ────────────────────────────────────────────────── */
+/* ── atmosphere overlays — subtle, gallery-grade (not arcade CRT) ── */
 #crt-overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
 
+/* barely-there horizontal texture — a whisper of "screen", not scanlines */
 .scanlines {
   position: absolute; inset: 0;
   background: repeating-linear-gradient(
     to bottom,
     rgba(0,0,0,0) 0px,
     rgba(0,0,0,0) 2px,
-    rgba(0,0,0,0.14) 3px,
-    rgba(0,0,0,0.14) 4px
+    rgba(0,0,0,0.05) 3px,
+    rgba(0,0,0,0.05) 4px
   );
   mix-blend-mode: multiply;
-  opacity: .35;
+  opacity: .5;
 }
-.scanlines::after {
-  content:""; position:absolute; inset:0;
-  background: linear-gradient(rgba(255,255,255,0.04), rgba(255,255,255,0));
-  height: 40%;
-  animation: sweep 7s linear infinite;
+/* .flicker repurposed as a faint film grain for depth */
+.flicker {
+  position: absolute; inset: -50%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: .018;
+  animation: grain 6s steps(6) infinite;
 }
-@keyframes sweep { 0%{transform:translateY(-60%)} 100%{transform:translateY(260%)} }
+@keyframes grain {
+  0%,100%{transform:translate(0,0)} 20%{transform:translate(-6%,4%)}
+  40%{transform:translate(4%,-5%)} 60%{transform:translate(-3%,-3%)} 80%{transform:translate(5%,3%)}
+}
 
 .vignette {
   position:absolute; inset:0;
-  background: radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,.65) 100%);
+  background: radial-gradient(125% 125% at 50% 42%, transparent 52%, rgba(0,0,0,.55) 100%);
 }
 .glow {
   position:absolute; inset:0;
-  box-shadow: inset 0 0 160px rgba(53,224,214,.06), inset 0 0 60px rgba(0,0,0,.6);
-}
-.flicker {
-  position:absolute; inset:0;
-  background: rgba(120,200,255,0.006);
-  animation: flick 6s steps(60) infinite;
-}
-@keyframes flick {
-  0%,100%{opacity:.5} 7%{opacity:.2} 9%{opacity:.7} 11%{opacity:.35}
-  53%{opacity:.55} 54%{opacity:.15} 56%{opacity:.5}
+  box-shadow: inset 0 0 220px rgba(87,214,204,.04), inset 0 0 80px rgba(0,0,0,.55);
 }
 
 /* respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .scanlines::after, .flicker { animation: none; }
+  .flicker { animation: none; }
 }
 
 /* ── Boot splash ─────────────────────────────────────────────────── */
 #boot {
   position: fixed; inset: 0; z-index: 80;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(60% 60% at 50% 45%, #060b12 0%, #020306 100%);
-  transition: opacity .8s ease;
+  background: radial-gradient(70% 70% at 50% 44%, #070c0e 0%, #030405 100%);
+  transition: opacity .9s cubic-bezier(.4,0,.2,1);
 }
 #boot.gone { opacity: 0; pointer-events: none; }
 #boot-log {
   margin: 0;
-  width: min(820px, 92vw);
-  height: min(70vh, 520px);
+  width: min(760px, 90vw);
+  height: min(64vh, 480px);
   overflow: hidden;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.62;
+  letter-spacing: .2px;
   color: var(--cyan);
   text-shadow: var(--glow-cyan);
   white-space: pre-wrap;
@@ -117,57 +145,77 @@ html, body {
 #boot-log .err  { color: var(--red); }
 #boot-log .dim  { color: var(--text-dim); }
 
-/* ── Shell layout ────────────────────────────────────────────────── */
+/* ── Shell layout — the terminal as a framed instrument ──────────── */
 #shell {
   position: relative;
   z-index: 20;
   display: flex;
-  flex-direction: column;
   height: 100vh;
-  padding: 0;
+  padding: clamp(10px, 3vh, 34px) clamp(10px, 4vw, 66px);
+}
+
+/* the "device" — a precise housing floating in the void.
+   the translucent panel (not backdrop-blur) dims the live attractor behind
+   the text: same glass read, none of the per-frame blur cost. */
+#frame {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 1360px; margin: 0 auto;
+  background: linear-gradient(180deg, rgba(15,20,22,.66), rgba(10,14,16,.52));
+  border: 1px solid rgba(150,180,174,.16);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.5),               /* crisp outer seam on the void */
+    0 30px 80px rgba(0,0,0,.6),             /* the device casts a shadow */
+    inset 0 1px 0 rgba(255,255,255,.06),    /* top edge catches light */
+    inset 0 0 60px rgba(0,0,0,.35);         /* soft inner darkening */
+  overflow: hidden;
 }
 
 #topbar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 14px;
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 16px;
   font-size: 12px;
   color: var(--text-dim);
-  background: linear-gradient(180deg, rgba(8,14,22,.85), rgba(8,14,22,.4));
-  border-bottom: 1px solid rgba(53,224,214,.14);
-  backdrop-filter: blur(3px);
+  background: linear-gradient(180deg, rgba(10,15,17,.6), rgba(10,15,17,.2));
+  border-bottom: 1px solid var(--edge);
 }
-#topbar .hostid { color: var(--amber); text-shadow: var(--glow-amber); letter-spacing: 2px; font-weight: 700; }
-#topbar .sep { color: var(--text-dim); opacity:.5; }
+/* the three quiet window dots (monochrome, not garish traffic lights) */
+#topbar .dots { display: inline-flex; gap: 7px; margin-right: 3px; }
+#topbar .dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+#topbar .dots i:hover { background: rgba(255,255,255,.16); }
+#topbar .hostid { color: var(--amber); text-shadow: var(--glow-amber); letter-spacing: 3px; font-weight: 700; font-size: 12.5px; }
+#topbar .rule { width: 1px; height: 15px; background: var(--edge-strong); margin: 0 2px; }
+#topbar .ctx { color: var(--cyan); letter-spacing: .4px; }
+#topbar .sep { color: var(--text-faint); }
 #topbar .mono { font-variant-numeric: tabular-nums; }
 #topbar .dim { color: var(--text-dim); }
 .grow { flex: 1; }
 
 .led {
-  width: 9px; height: 9px; border-radius: 50%;
+  width: 8px; height: 8px; border-radius: 50%;
   background: var(--green);
-  box-shadow: 0 0 8px var(--green), 0 0 2px #fff;
-  animation: pulse 3.2s ease-in-out infinite;
+  box-shadow: 0 0 9px var(--green), 0 0 2px rgba(255,255,255,.7);
+  animation: pulse 3.6s ease-in-out infinite;
 }
-.led.unstable { background: var(--red); box-shadow: 0 0 10px var(--red); animation-duration: .5s; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+.led.unstable { background: var(--red); box-shadow: 0 0 11px var(--red); animation-duration: .5s; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+@media (prefers-reduced-motion: reduce) { .led { animation: none; } }
 
 .chip {
-  font-family: var(--mono); font-size: 11px;
-  color: var(--cyan); background: transparent;
-  border: 1px solid rgba(53,224,214,.35);
-  border-radius: 3px; padding: 3px 9px; cursor: pointer;
-  text-shadow: var(--glow-cyan); transition: all .15s ease;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .3px;
+  color: var(--cyan); background: rgba(87,214,204,.04);
+  border: 1px solid rgba(87,214,204,.28);
+  border-radius: 7px; padding: 4px 11px; cursor: pointer;
+  transition: all .16s ease;
 }
-.chip:hover { background: rgba(53,224,214,.12); border-color: var(--cyan); }
-.chip.active { background: rgba(255,176,0,.14); color: var(--amber); border-color: var(--amber); text-shadow: var(--glow-amber); }
+.chip:hover { background: rgba(87,214,204,.12); border-color: var(--cyan); box-shadow: var(--glow-cyan); }
+.chip.active { background: rgba(227,169,74,.12); color: var(--amber); border-color: var(--amber); text-shadow: var(--glow-amber); }
 
 #split { flex: 1; display: flex; min-height: 0; }
 #term-pane {
-  flex: 1; min-width: 0; padding: 10px 8px 6px 14px;
-  /* translucent terminal (transparent-xterm vibe): the orbifold shows through,
-     but text stays readable thanks to the dark wash + brighter palette */
-  background: linear-gradient(180deg, rgba(1,3,5,.60), rgba(2,5,9,.70));
-  border-right: 1px solid rgba(79,214,204,.07);
+  flex: 1; min-width: 0; padding: 14px 10px 8px 18px;
+  background: linear-gradient(180deg, rgba(4,6,7,.26), rgba(5,8,9,.40));
 }
 #terminal { width: 100%; height: 100%; }
 
@@ -179,6 +227,8 @@ html, body {
   overflow: hidden;
   display: flex; flex-direction: column;
 }
+/* the hidden attribute must win over the display:flex above (only shown on dissociate) */
+#kernel-pane[hidden] { display: none; }
 .kernel-head {
   font-size: 10px; letter-spacing: 1.5px; color: var(--red);
   padding: 6px 10px; border-bottom: 1px solid rgba(255,77,77,.2);
@@ -191,22 +241,28 @@ html, body {
 }
 
 #hint {
-  display:flex; align-items:center; gap:8px;
-  padding: 5px 14px; font-size: 11px; color: var(--text-dim);
-  border-top: 1px solid rgba(53,224,214,.12);
-  background: rgba(6,10,16,.55);
+  display:flex; align-items:center; gap:9px;
+  padding: 8px 16px; font-size: 11px; color: var(--text-dim); letter-spacing: .2px;
+  border-top: 1px solid var(--edge);
+  background: linear-gradient(0deg, rgba(8,12,14,.5), rgba(8,12,14,.15));
 }
 #hint code {
-  color: var(--green); background: rgba(124,255,107,.07);
-  padding: 1px 5px; border-radius: 3px; font-size: 11px;
+  color: var(--green); background: rgba(116,221,111,.07);
+  border: 1px solid rgba(116,221,111,.14);
+  padding: 1px 6px; border-radius: 5px; font-size: 11px;
 }
 #hint .dim { color: var(--text-dim); }
+#hint .sep { color: var(--text-faint); }
+#hint .tip { color: var(--text-faint); }
 
 /* ── xterm tweaks ────────────────────────────────────────────────── */
-.xterm { height: 100%; padding: 4px; }
+.xterm { height: 100%; padding: 2px; }
+.xterm-viewport { background: transparent !important; }
 .xterm-viewport::-webkit-scrollbar { width: 8px; }
-.xterm-viewport::-webkit-scrollbar-thumb { background: rgba(53,224,214,.25); border-radius: 4px; }
-.xterm .xterm-screen { text-shadow: 0 0 1px rgba(79,214,204,.10); }
+.xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: rgba(87,214,204,.18); border-radius: 6px; }
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: rgba(87,214,204,.32); }
+.xterm .xterm-screen { text-shadow: 0 0 1px rgba(87,214,204,.08); }
 
 /* split-view active */
 #shell.dissociated #kernel-pane { display: flex; }
@@ -484,24 +540,31 @@ body.dissociated #topbar .hostid::after { content: ' ·· split'; color: var(--m
 @media (max-width: 720px) { #km-grid { grid-template-columns: 1fr; grid-auto-rows: min-content; overflow-y: auto; } #km-att { height: 52vh; } }
 
 /* responsive */
+@media (max-width: 900px) {
+  #shell { padding: clamp(6px, 1.6vh, 14px) clamp(6px, 1.8vw, 18px); }
+  #frame { border-radius: 12px; }
+}
 @media (max-width: 760px) {
   #shell.dissociated #split { flex-direction: column; }
   #topbar .mono#status-load { display:none; }
   #hint { font-size: 10px; }
+  #hint .tip, #hint .sep { display: none; }
 }
 
-/* phones */
+/* phones — the instrument goes full-bleed */
 @media (max-width: 640px) {
+  #shell { padding: 0; }
+  #frame { border: none; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
   #topbar {
-    flex-wrap: wrap; gap: 6px 8px; padding: 6px 10px; font-size: 11px;
+    flex-wrap: wrap; gap: 6px 9px; padding: 7px 11px; font-size: 11px;
     row-gap: 4px;
   }
-  #topbar .sep { display: none; }
+  #topbar .sep, #topbar .rule, #topbar .dots { display: none; }
   #topbar .grow { flex-basis: 100%; height: 0; }       /* force the chip onto its own row edge */
   #topbar #status-metric, #topbar #status-info { font-size: 10px; }
   #btn-dissociate { margin-left: auto; }
 
-  #term-pane { padding: 4px 4px 2px 8px; }
+  #term-pane { padding: 8px 6px 4px 10px; }
   #kernel-pane { display: none !important; }            /* split view stacks instead */
   #shell.dissociated #split { flex-direction: column; }
   #shell.dissociated #kernel-pane { display: flex !important; min-width: 0; width: auto; height: 38%; }
