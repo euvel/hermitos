@@ -90,23 +90,30 @@ export async function onRequestPost({ request, env }) {
   if (context.observerClass) sys += ` The watch has read this visitor as "${context.observerClass}" — you may lightly tailor emphasis (operator→systems/kernel; recruiter/reader→the person + the work; curious/explorer→labs & dynamics) but never announce the label unless asked.`;
   const messages = [{ role: 'system', content: sys }, { role: 'user', content: question }];
 
-  // 1) Groq first (quality — qwen3.6-27b by default)
+  // 1) Groq first (quality — qwen3.6-27b, reasoning OFF for direct answers)
   let groqErr = null;
   if (env.GROQ_API_KEY) {
     const model = env.GROQ_MODEL || 'qwen/qwen3.6-27b';
     try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_API_KEY}` },
-        body: JSON.stringify({ model, temperature: 0.6, max_tokens: 640, messages }),
-      });
-      if (r.ok) {
-        const data = await r.json();
-        const answer = stripThink(data?.choices?.[0]?.message?.content || '');
-        if (answer) return json({ answer, source: 'groq', model });
-      } else {
-        groqErr = { status: r.status, detail: (await r.text().catch(() => '')).slice(0, 200) };
+      let content = '', status = 0, detail = '';
+      // qwen3 is a reasoning model — without reasoning_effort:none it spends the
+      // whole budget on <think> and never reaches the answer. Retry without the
+      // param only if Groq rejects it (400), so an unsupported model still works.
+      for (const withEffort of [true, false]) {
+        const payload = { model, temperature: 0.6, max_tokens: 700, messages };
+        if (withEffort) payload.reasoning_effort = 'none';
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_API_KEY}` },
+          body: JSON.stringify(payload),
+        });
+        if (r.ok) { const data = await r.json(); content = data?.choices?.[0]?.message?.content || ''; break; }
+        status = r.status; detail = (await r.text().catch(() => '')).slice(0, 200);
+        if (status !== 400) break;   // only a bad-param 400 is worth retrying without reasoning_effort
       }
+      const answer = stripThink(content);
+      if (answer) return json({ answer, source: 'groq', model });
+      if (status) groqErr = { status, detail };
     } catch (e) { groqErr = { detail: String(e).slice(0, 200) }; }
   }
 
@@ -135,6 +142,7 @@ function stripThink(s) {
   s = (s || '').replace(/<think>[\s\S]*?<\/think>/gi, '');
   const ci = s.lastIndexOf('</think>');
   if (ci !== -1) s = s.slice(ci + 8);           // dangling close tag → keep what follows
+  if (/<think>/i.test(s)) return '';            // unclosed/truncated reasoning → unusable; trigger fallback
   return s.trim();
 }
 
