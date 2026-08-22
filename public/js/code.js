@@ -2,11 +2,28 @@
    HERMIT-OS — the site is its own portfolio
    `source [file]`   read the REAL, live source of this site (fetched
                      from the actual deployed assets — not a copy)
-   `git log`         the real development history of HERMIT-OS
-   `git show <id>`   what a given phase changed
+   `git log`         the REAL commit history, live from the GitHub API
+   `git show <sha>`  the real diff stat for a commit
    =================================================================== */
 
 import { c } from './shell.js';
+
+// this very repository — the same one CI reads (see ci.js)
+const REPO = 'euvel/hermitos';
+const GH = `https://api.github.com/repos/${REPO}`;
+async function gh(path) {
+  const r = await fetch(`${GH}${path}`, { headers: { accept: 'application/vnd.github+json' }, cache: 'no-store' });
+  if (r.status === 403) throw new Error('GitHub API rate limit reached (60/hr per IP, unauthenticated) — try again shortly.');
+  if (r.status === 404) throw new Error(`repo ${REPO} not found or private.`);
+  if (!r.ok) throw new Error(`GitHub API HTTP ${r.status}`);
+  return r.json();
+}
+let _commits = null;                              // session cache (stay under the rate limit)
+async function realLog(n) {
+  if (!_commits) _commits = await gh('/commits?per_page=30');
+  return _commits.slice(0, n);
+}
+const firstLine = (s) => (s || '').split('\n')[0];
 
 const SOURCES = {
   'orbifold.js':  '/js/orbifold.js',
@@ -66,63 +83,75 @@ export function codeCommands(send) {
     },
 
     git: {
-      desc: 'real development history of HERMIT-OS', usage: 'git log [--oneline] | git show <id>',
+      desc: 'the REAL commit history of this site (live from GitHub)',
+      usage: 'git log [--oneline] [-n N] | git show <sha> | git blame',
       async run(args, ctx, piped) {
-        const log = await loadChangelog();
-        if (!log) return send(c.red('git: development log unavailable'), ctx, piped);
-
         const sub = args[0] || 'log';
-
-        if (sub === 'log') {
-          if (args.includes('--oneline')) {
-            return send(log.map(e => `${c.amber(e.id)} ${c.white(e.title)}`).join('\n'), ctx, piped);
+        try {
+          if (sub === 'log') {
+            let n = 15;
+            const ni = args.indexOf('-n');
+            if (ni >= 0 && args[ni + 1]) n = Math.max(1, Math.min(30, parseInt(args[ni + 1], 10) || 15));
+            const commits = await realLog(n);
+            if (args.includes('--oneline')) {
+              return send(
+                commits.map(x => c.amber(x.sha.slice(0, 7)) + ' ' + c.white(firstLine(x.commit.message))).join('\n') +
+                '\n' + c.gray(`  · real history of github.com/${REPO}, fetched live`), ctx, piped);
+            }
+            const out = [];
+            for (const x of commits) {
+              const a = x.commit.author || {};
+              const [title, ...rest] = x.commit.message.split('\n');
+              out.push(c.amber('commit ' + x.sha));
+              out.push(c.gray(`Author: ${a.name} <${a.email}>`));
+              out.push(c.gray('Date:   ' + new Date(a.date).toUTCString()));
+              out.push('');
+              out.push('    ' + c.white(title));
+              const body = rest.join('\n').trim();
+              if (body) out.push(body.split('\n').map(l => '    ' + c.gray(l)).join('\n'));
+              out.push('');
+            }
+            out.push(c.gray(`  · ${commits.length} real commits, live from github.com/${REPO}  ·  git show <sha> for a diff stat`));
+            return send(out.join('\n'), ctx, piped);
           }
-          const out = [];
-          for (const e of log) {
-            out.push(c.amber('commit ' + e.hash) + c.gray('  (' + e.id + ')'));
-            out.push(c.gray('Author: Euvel <euvel@orbifold>'));
-            out.push(c.gray('Date:   ' + e.date));
+
+          if (sub === 'show') {
+            const id = args[1];
+            if (!id) return send(c.gray('usage: git show <sha>'), ctx, piped);
+            const x = await gh('/commits/' + encodeURIComponent(id));
+            const a = x.commit.author || {};
+            const [title, ...rest] = x.commit.message.split('\n');
+            const st = x.stats || {};
+            const files = x.files || [];
+            const out = [
+              c.amber('commit ' + x.sha),
+              c.gray(`Author: ${a.name} <${a.email}>`),
+              c.gray('Date:   ' + new Date(a.date).toUTCString()),
+              '',
+              '    ' + c.white(title),
+            ];
+            const body = rest.join('\n').trim();
+            if (body) out.push(body.split('\n').map(l => '    ' + c.gray(l)).join('\n'));
             out.push('');
-            out.push('    ' + c.white(e.title));
-            if (e.body) out.push('    ' + c.gray(e.body));
-            out.push('');
+            out.push(c.cyan(`${files.length} file(s) changed`) + c.gray(`   +${st.additions || 0} / -${st.deletions || 0}`));
+            for (const f of files.slice(0, 40)) {
+              const mark = f.status === 'added' ? c.green('A') : f.status === 'removed' ? c.red('D') : f.status === 'renamed' ? c.mag('R') : c.amber('M');
+              out.push('  ' + mark + ' ' + c.gray(f.filename) + c.gray(`  +${f.additions}/-${f.deletions}`));
+            }
+            if (files.length > 40) out.push(c.gray(`  … and ${files.length - 40} more`));
+            return send(out.join('\n'), ctx, piped);
           }
-          return send(out.join('\n'), ctx, piped);
-        }
 
-        if (sub === 'show') {
-          const id = args[1];
-          const e = log.find(x => x.id === id || x.hash.startsWith(id || '~'));
-          if (!e) return send(c.red(`git: bad revision '${id || ''}'`), ctx, piped);
-          const out = [
-            c.amber('commit ' + e.hash),
-            c.gray('Date:   ' + e.date),
-            '',
-            '    ' + c.white(e.title),
-            e.body ? '    ' + c.gray(e.body) : '',
-            '',
-            c.cyan('changed:'),
-            ...(e.files || []).map(f => c.gray('  ' + f)),
-          ].filter(Boolean);
-          return send(out.join('\n'), ctx, piped);
-        }
+          if (sub === 'blame') {
+            return send(c.gray('git blame: every line traces to a single author (') + c.white('Euvel') +
+              c.gray(') — but the lines do not glue into a single story. see ') + c.green('man sheaf') + c.gray('.'), ctx, piped);
+          }
 
-        if (sub === 'blame') {
-          return send(c.gray('git blame: every line traces to a single author, but the lines do not glue into a single story. see `man sheaf`.'), ctx, piped);
+          return send(c.gray('git log [--oneline] [-n N] · git show <sha> · git blame'), ctx, piped);
+        } catch (e) {
+          return send(c.red('git: ' + (e.message || 'unavailable')), ctx, piped);
         }
-
-        return send(c.gray('git log [--oneline] · git show <id> · git blame <file>'), ctx, piped);
       },
     },
   };
-}
-
-let _changelog = null;
-async function loadChangelog() {
-  if (_changelog) return _changelog;
-  try {
-    const r = await fetch('/meta/changelog.json', { cache: 'no-store' });
-    if (r.ok) { _changelog = await r.json(); return _changelog; }
-  } catch (_) {}
-  return null;
 }
