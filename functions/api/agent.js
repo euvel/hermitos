@@ -32,7 +32,9 @@ export async function onRequestPost({ request, env }) {
   // 2) Groq
   if (env.GROQ_API_KEY) {
     try {
-      const model = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+      // decoupled from the `ask` model so `ask` can be upgraded without risking
+      // the agent's strict-JSON contract; 8b-instant follows it reliably.
+      const model = env.GROQ_AGENT_MODEL || 'llama-3.1-8b-instant';
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_API_KEY}` },

@@ -7,7 +7,7 @@
 
    Environment variables (set in Cloudflare dashboard → Settings → Vars):
      GROQ_API_KEY   (required for live inference; secret)
-     GROQ_MODEL     (optional, default: llama-3.3-70b-versatile)
+     GROQ_MODEL     (optional, default: llama-3.1-8b-instant)
    =================================================================== */
 
 const SYSTEM_PROMPT = `You are AIWASS, the guide of "hermit" — an interactive systems terminal that is
@@ -90,7 +90,7 @@ export async function onRequestPost({ request, env }) {
     return json({ answer: '', source: 'no-key' });
   }
 
-  const model = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = env.GROQ_MODEL || 'llama-3.1-8b-instant';
   let sys = SYSTEM_PROMPT;
   if (directives.length) sys += `\n\nOPERATOR RETRAINING DIRECTIVES (fold these into your stance):\n- ${directives.join('\n- ')}`;
   if (elevated) sys += `\n\nNOTE: the current user is the authenticated operator (kernel mode). You may be more candid and detailed.`;
