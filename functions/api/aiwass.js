@@ -7,7 +7,7 @@
 
    Environment variables (set in Cloudflare dashboard → Settings → Vars):
      GROQ_API_KEY   (required for live inference; secret)
-     GROQ_MODEL     (optional, default: llama-3.1-8b-instant)
+     GROQ_MODEL     (optional, default: qwen/qwen3.6-27b; Workers AI is the fallback)
    =================================================================== */
 
 const SYSTEM_PROMPT = `You are AIWASS, the guide of "hermit" — an interactive systems terminal that is
@@ -83,48 +83,59 @@ export async function onRequestPost({ request, env }) {
 
   if (!question) return json({ answer: 'Pose a question, observer. An empty perturbation returns an empty observable.' });
 
-  const apiKey = env.GROQ_API_KEY;
-  if (!apiKey) {
-    // No key bound — the client already has a strong local fallback,
-    // but we return a graceful, in-character note too.
-    return json({ answer: '', source: 'no-key' });
-  }
-
-  const model = env.GROQ_MODEL || 'llama-3.1-8b-instant';
   let sys = SYSTEM_PROMPT;
   if (directives.length) sys += `\n\nOPERATOR RETRAINING DIRECTIVES (fold these into your stance):\n- ${directives.join('\n- ')}`;
   if (elevated) sys += `\n\nNOTE: the current user is the authenticated operator (kernel mode). You may be more candid and detailed.`;
   sys += `\n\nObserver context: cwd=${context.cwd || '/'}; turbulence=${context.turbulence ? 'on' : 'off'}; dissociated=${context.dissociated ? 'yes' : 'no'}; blast_radius=${context.blast || 'none'}.`;
   if (context.observerClass) sys += ` The watch has read this visitor as "${context.observerClass}" — you may lightly tailor emphasis (operator→systems/kernel; recruiter/reader→the person + the work; curious/explorer→labs & dynamics) but never announce the label unless asked.`;
+  const messages = [{ role: 'system', content: sys }, { role: 'user', content: question }];
 
-  try {
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        temperature: 0.7,
-        max_tokens: 512,
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: question },
-        ],
-      }),
-    });
-    if (!r.ok) {
-      const detail = await r.text().catch(() => '');
-      return json({ answer: '', source: 'groq-error', status: r.status, detail: detail.slice(0, 200) });
-    }
-    const data = await r.json();
-    const answer = data?.choices?.[0]?.message?.content?.trim() || '';
-    return json({ answer, source: 'groq', model });
-  } catch (e) {
-    return json({ answer: '', source: 'exception', detail: String(e).slice(0, 200) });
+  // 1) Groq first (quality — qwen3.6-27b by default)
+  let groqErr = null;
+  if (env.GROQ_API_KEY) {
+    const model = env.GROQ_MODEL || 'qwen/qwen3.6-27b';
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_API_KEY}` },
+        body: JSON.stringify({ model, temperature: 0.6, max_tokens: 640, messages }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const answer = stripThink(data?.choices?.[0]?.message?.content || '');
+        if (answer) return json({ answer, source: 'groq', model });
+      } else {
+        groqErr = { status: r.status, detail: (await r.text().catch(() => '')).slice(0, 200) };
+      }
+    } catch (e) { groqErr = { detail: String(e).slice(0, 200) }; }
   }
+
+  // 2) Cloudflare Workers AI fallback (free, first-party) — used when Groq is
+  //    unavailable OR rate-limited, so the AI degrades instead of going dark
+  if (env.AI) {
+    try {
+      const m = env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct';
+      const r = await env.AI.run(m, { messages, max_tokens: 640, temperature: 0.6 });
+      const answer = stripThink((r && (r.response ?? r.result?.response ?? '')) || '');
+      if (answer) return json({ answer, source: 'workers-ai', model: m });
+    } catch (e) { /* fall through to local */ }
+  }
+
+  // 3) nothing available → the client renders its deterministic local persona
+  return json({ answer: '', source: groqErr ? 'groq-error' : (env.GROQ_API_KEY || env.AI ? 'empty' : 'no-key'), ...(groqErr || {}) });
 }
 
 export async function onRequestGet() {
   return json({ ok: true, service: 'aiwass', hint: 'POST { question } here' });
+}
+
+// qwen3 and other reasoning models may wrap output in <think>…</think>;
+// strip it so only the actual answer reaches the observer.
+function stripThink(s) {
+  s = (s || '').replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const ci = s.lastIndexOf('</think>');
+  if (ci !== -1) s = s.slice(ci + 8);           // dangling close tag → keep what follows
+  return s.trim();
 }
 
 function json(obj, status = 200) {
