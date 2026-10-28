@@ -235,7 +235,7 @@ work too):
 | Variable        | Type             | Required? | Notes |
 | --------------- | ---------------- | --------- | ----- |
 | `GROQ_API_KEY`  | Secret (encrypt) | for live AIWASS | Your Groq API key. Without it, AIWASS falls back to the built-in local persona. |
-| `GROQ_MODEL`    | Plaintext        | optional  | Defaults to `llama-3.3-70b-versatile`. |
+| `GROQ_MODEL`    | Plaintext        | optional  | Tried first, then the fallback chain in `functions/api/_groq.js` (`openai/gpt-oss-120b` → `qwen/qwen3.8-27b` → `llama-3.1-8b-instant`). |
 | `KERNEL_TOKEN`  | Secret (encrypt) | for editing/seed | Any strong random string you choose. Required to **persist** kernel-mode edits to KV and to POST `/api/admin/seed`. |
 
 ### 6) Re-deploy

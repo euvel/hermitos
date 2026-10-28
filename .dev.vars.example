@@ -4,8 +4,8 @@
 # Live AIWASS via Groq (optional — falls back to local persona if absent)
 GROQ_API_KEY=
 
-# Optional model override
-# GROQ_MODEL=llama-3.3-70b-versatile
+# Optional model override (tried before the built-in chain in functions/api/_groq.js)
+# GROQ_MODEL=openai/gpt-oss-120b
 
 # Required to PERSIST kernel-mode edits / seed D1 (any strong random string)
 KERNEL_TOKEN=

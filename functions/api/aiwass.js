@@ -7,7 +7,7 @@
 
    Environment variables (set in Cloudflare dashboard → Settings → Vars):
      GROQ_API_KEY   (required for live inference; secret)
-     GROQ_MODEL     (optional, default: qwen/qwen3.6-27b; Workers AI is the fallback)
+     GROQ_MODEL     (optional, tried first; then the _groq.js chain, then Workers AI)
    =================================================================== */
 
 const SYSTEM_PROMPT = `You are AIWASS, the guide of "hermit" — an interactive systems terminal that is
@@ -66,6 +66,7 @@ There is NO public way in — never invent one. Observers can read and run every
 else for real.`;
 
 import { applyFault } from './fault.js';
+import { groqChat, stripThink } from './_groq.js';
 
 export async function onRequestPost({ request, env }) {
   // honor any active injected fault — chaos engineering hits the real AI path
@@ -90,31 +91,12 @@ export async function onRequestPost({ request, env }) {
   if (context.observerClass) sys += ` The watch has read this visitor as "${context.observerClass}" — you may lightly tailor emphasis (operator→systems/kernel; recruiter/reader→the person + the work; curious/explorer→labs & dynamics) but never announce the label unless asked.`;
   const messages = [{ role: 'system', content: sys }, { role: 'user', content: question }];
 
-  // 1) Groq first (quality — qwen3.6-27b, reasoning OFF for direct answers)
+  // 1) Groq first (quality), walking a model fallback chain — see _groq.js
   let groqErr = null;
   if (env.GROQ_API_KEY) {
-    const model = env.GROQ_MODEL || 'qwen/qwen3.6-27b';
-    try {
-      let content = '', status = 0, detail = '';
-      // qwen3 is a reasoning model — without reasoning_effort:none it spends the
-      // whole budget on <think> and never reaches the answer. Retry without the
-      // param only if Groq rejects it (400), so an unsupported model still works.
-      for (const withEffort of [true, false]) {
-        const payload = { model, temperature: 0.6, max_tokens: 700, messages };
-        if (withEffort) payload.reasoning_effort = 'none';
-        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_API_KEY}` },
-          body: JSON.stringify(payload),
-        });
-        if (r.ok) { const data = await r.json(); content = data?.choices?.[0]?.message?.content || ''; break; }
-        status = r.status; detail = (await r.text().catch(() => '')).slice(0, 200);
-        if (status !== 400) break;   // only a bad-param 400 is worth retrying without reasoning_effort
-      }
-      const answer = stripThink(content);
-      if (answer) return json({ answer, source: 'groq', model });
-      if (status) groqErr = { status, detail };
-    } catch (e) { groqErr = { detail: String(e).slice(0, 200) }; }
+    const g = await groqChat(env, { messages, max_tokens: 700, temperature: 0.6, override: env.GROQ_MODEL });
+    if (g.text) return json({ answer: g.text, source: 'groq', model: g.model });
+    groqErr = { errors: g.errors };
   }
 
   // 2) Cloudflare Workers AI fallback (free, first-party) — used when Groq is
@@ -134,16 +116,6 @@ export async function onRequestPost({ request, env }) {
 
 export async function onRequestGet() {
   return json({ ok: true, service: 'aiwass', hint: 'POST { question } here' });
-}
-
-// qwen3 and other reasoning models may wrap output in <think>…</think>;
-// strip it so only the actual answer reaches the observer.
-function stripThink(s) {
-  s = (s || '').replace(/<think>[\s\S]*?<\/think>/gi, '');
-  const ci = s.lastIndexOf('</think>');
-  if (ci !== -1) s = s.slice(ci + 8);           // dangling close tag → keep what follows
-  if (/<think>/i.test(s)) return '';            // unclosed/truncated reasoning → unusable; trigger fallback
-  return s.trim();
 }
 
 function json(obj, status = 200) {
