@@ -68,12 +68,13 @@ export async function runAgent(ctx, goal) {
   ];
 
   let usedLLM = true;
+  const trace = [];   // what each real tool call returned (the fallback planner summarizes it)
   for (let step = 1; step <= MAX_STEPS; step++) {
     term.write('\r\n' + c.gray(`── step ${step} `) + c.gray('─'.repeat(40)) + '\r\n');
 
     let raw = await callPlanner(messages, ctx);
     let act;
-    if (raw == null) { usedLLM = false; act = heuristicStep(goal, ctx, step); }
+    if (raw == null) { usedLLM = false; act = heuristicStep(goal, ctx, step, trace); }
     else act = parseAction(raw);
 
     if (!act) { act = { action: 'final', input: raw || 'inconclusive.' }; }
@@ -91,6 +92,7 @@ export async function runAgent(ctx, goal) {
 
     const obs = await runTool(act.action, act.input, ctx);
     term.write(c.gray('  observe  ') + c.gray(wrap(obs.display, 68, 11)) + '\r\n');
+    trace.push({ action: act.action, display: obs.display });
 
     messages.push({ role: 'assistant', content: raw || JSON.stringify(act) });
     messages.push({ role: 'user', content: `Observation:\n${obs.model}` });
@@ -202,36 +204,84 @@ function toolRead(path, ctx) {
 }
 
 /* ── deterministic fallback planner (no LLM bound) ───────────────── */
+// Linux concepts → a real BusyBox (ash) demo that SHOWS the idea on the box.
+// First match wins, so the specific concepts sit above the generic ones.
+const DEMOS = [
+  { re: /file.?descriptor|\bfds?\b|redirect/i, what: 'file descriptors',
+    cmd: 'ls -l /proc/$$/fd; exec 3>/tmp/fd-demo; echo "--- after exec 3>/tmp/fd-demo, fd 3 is open:"; ls -l /proc/$$/fd; ' +
+         'echo "written through fd 3" >&3; exec 3>&-; echo "--- fd 3 closed; the file holds:"; cat /tmp/fd-demo' },
+  { re: /\bpipes?\b/i, what: 'pipes',
+    cmd: 'echo "--- stdin of a piped process is a pipe:"; sleep 1 | ls -l /proc/self/fd/0; echo "--- data flowing through one:"; ls /proc | head -5 | wc -l' },
+  { re: /signal|sigterm|sigkill|\bkill\b/i, what: 'signals',
+    cmd: 'sleep 30 & P=$!; echo "sleep is pid $P"; grep State /proc/$P/status; kill -STOP $P; grep State /proc/$P/status; ' +
+         'kill -CONT $P; kill -TERM $P; wait $P; echo "exit status after SIGTERM: $? (128+15)"' },
+  { re: /namespace/i, what: 'namespaces', cmd: 'ls -l /proc/$$/ns' },
+  { re: /inode|hard.?link|symlink|symbolic link/i, what: 'inodes and links',
+    cmd: 'echo x > /tmp/a; ln -f /tmp/a /tmp/b; ln -sf /tmp/a /tmp/c; ls -li /tmp/a /tmp/b /tmp/c' },
+  { re: /permission|chmod|\bumask\b|\bowner(ship)?\b/i, what: 'permissions',
+    cmd: 'id; touch /tmp/p; chmod 640 /tmp/p; ls -l /tmp/p; chmod u+x,o+r /tmp/p; ls -l /tmp/p' },
+  { re: /environment|env var|\$path\b/i, what: 'environment variables',
+    cmd: 'export DEMO=hello; sh -c \'echo "a child process inherits DEMO=$DEMO"\'; env | head -10' },
+  { re: /\bmounts?\b|\bdisk\b|filesystem/i, what: 'mounts', cmd: 'cat /proc/mounts; df -h 2>/dev/null' },
+  { re: /memory|\bram\b|\bmem\b/i, what: 'memory', cmd: 'free -m 2>/dev/null || head /proc/meminfo' },
+  { re: /\bcpu\b|processor/i, what: 'the CPU', cmd: 'head -20 /proc/cpuinfo' },
+  { re: /uptime|\bload\b/i, what: 'uptime and load', cmd: 'uptime; cat /proc/loadavg' },
+  { re: /process|\bpids?\b|\bps\b|fork/i, what: 'processes',
+    cmd: 'echo "this shell is pid $$ (parent $PPID)"; ps | head -15' },
+  { re: /\/proc\b|procfs/i, what: '/proc', cmd: 'ls /proc | head -20; head -8 /proc/$$/status' },
+  { re: /kernel version|uname|\bos\b/i, what: 'the kernel', cmd: 'uname -a; cat /proc/version' },
+];
+const MACHINEY = /\b(box|vm|machine|shell|linux|terminal|kernel|busybox|this (system|computer))\b/i;
+const RESUMEY = /\b(euvel|he|his|résumé|resume|cv|skills?|experience|projects?|hire|career)\b/i;
 const MATHY = /[0-9]|prove|calcul|compute|factor|prime|integral|deriv|matrix|equation|solve|sum|sqrt|theorem|simplify|=|\+|\*|\^/i;
-const MACHINEY = /\bkernel\b|uname|\bos\b|\bcpu\b|processor|memory|\bram\b|\bmem\b|process(es)?\b|uptime|\/proc|\bmount\b|\bdisk\b|filesystem|this (machine|box|system|computer)/i;
-function heuristicStep(goal, ctx, step) {
+const KEYWORDS = ['kubernetes', 'chaos', 'linux', 'kernel', 'ebpf', 'rust', 'go', 'python', 'ai', 'rag', 'terraform', 'sre', 'observability'];
+const STOP = new Set(('a an the and or of to in on for with about at by from into is are was be can could would will do does did ' +
+  'you your me my i it this that these those what which who how why when where please show tell explain demonstrate demo ' +
+  'give find list describe example examples some any concept concepts work works working use using run make').split(' '));
+
+export function demoFor(goal) { return DEMOS.find(d => d.re.test(goal)) || null; }
+
+// the term worth searching the skill tree for — never a filler word like "demonstrate"
+export function keywordFor(goal) {
   const g = goal.toLowerCase();
+  return KEYWORDS.find(k => new RegExp(`\\b${k}\\b`).test(g))
+    || g.split(/[^a-z0-9.+#-]+/).find(w => w.length > 3 && !STOP.has(w))
+    || null;
+}
+
+export function heuristicStep(goal, ctx, step, trace = []) {
+  const g = goal.toLowerCase();
+  const resumey = RESUMEY.test(goal);
+  const demo = resumey ? null : demoFor(goal);
+
   // about THIS machine → real shell on the booted Linux box
-  if (MACHINEY.test(goal) && ctx.state.linux && ctx.state.linux.ready) {
-    if (step === 1) {
-      const cmd = /kernel|uname|\bos\b/.test(g) ? 'uname -a'
-        : /cpu|processor/.test(g) ? 'head -20 /proc/cpuinfo'
-        : /memory|\bram\b|\bmem\b/.test(g) ? 'free -m 2>/dev/null || head /proc/meminfo'
-        : /uptime|load/.test(g) ? 'uptime; cat /proc/loadavg'
-        : /process/.test(g) ? 'ps' : 'uname -a; echo; free -m 2>/dev/null | head';
-      return { thought: 'querying the real kernel via shell.', action: 'shell', input: cmd };
+  if (demo || (!resumey && MACHINEY.test(goal))) {
+    if (!ctx.state.linux || !ctx.state.linux.ready) {
+      return { thought: 'this needs the real Linux box, which is not booted.', action: 'final',
+        input: 'That runs on the real Linux box, which is not booted yet. Run `kernel boot real`, wait for the prompt, then ask again.' };
     }
-    return { thought: 'reporting what the box returned.', action: 'final', input: 'See the real kernel output above.' };
+    if (step === 1) {
+      return { thought: demo ? `demonstrating ${demo.what} on the real kernel.` : 'querying the real kernel via shell.',
+        action: 'shell', input: demo ? demo.cmd : 'uname -a; echo; free -m 2>/dev/null | head' };
+    }
+    return { thought: 'reporting what the box returned.', action: 'final',
+      input: `The output above is what the real kernel returned${demo ? ` — a live demo of ${demo.what}` : ''}.` };
   }
   // math/computation → Python
-  if (MATHY.test(goal) && !/skill|project|experience|euvel|owner|résumé|resume|devops|kubernetes/i.test(goal)) {
+  if (MATHY.test(goal) && !resumey && !/devops|kubernetes/i.test(goal)) {
     if (step === 1) return { thought: 'this is computational — solving it in Python.', action: 'python', input: pyFor(goal) };
     return { thought: 'reporting the computed result.', action: 'final', input: 'See the computed output above.' };
   }
-  const kw = ['kubernetes', 'chaos', 'linux', 'kernel', 'ebpf', 'rust', 'go', 'python', 'ai', 'rag', 'terraform', 'sre', 'observability']
-    .find(k => g.includes(k)) || g.split(/\s+/).filter(w => w.length > 4)[0] || 'devops';
-  if (step === 1) return { thought: `searching the skill tree for evidence of "${kw}".`, action: 'grep', input: kw };
+  // about the owner → search the skill tree, the projects DB, then read a file
+  const kw = keywordFor(goal);
+  if (!kw) return { thought: 'nothing specific to search for.', action: 'final', input: synth(goal, kw, trace) };
+  if (step === 1) return { thought: `searching the skill tree for "${kw}".`, action: 'grep', input: kw };
   if (step === 2) {
-    const area = /linux|kernel|ebpf/.test(g) ? 'linux' : /python|rust|go|api/.test(g) ? 'development' : /ai|rag|ml|agent/.test(g) ? 'ai' : 'devops';
-    return { thought: 'cross-checking the projects/skills database.', action: 'sql', input: `SELECT name, stack, year, impact FROM projects WHERE lower(stack) LIKE '%${kw}%' OR lower(impact) LIKE '%${kw}%' LIMIT 5` };
+    const q = kw.replace(/'/g, "''");
+    return { thought: 'cross-checking the projects database.', action: 'sql', input: `SELECT name, stack, year, impact FROM projects WHERE lower(stack) LIKE '%${q}%' OR lower(impact) LIKE '%${q}%' LIMIT 5` };
   }
   if (step === 3) return { thought: 'reading the most relevant skill file in full.', action: 'read', input: skillPathFor(g) };
-  return { thought: 'synthesizing.', action: 'final', input: synth(goal) };
+  return { thought: 'summarizing what the tools found.', action: 'final', input: synth(goal, kw, trace) };
 }
 
 function pyFor(goal) {
@@ -247,9 +297,15 @@ function skillPathFor(g) {
   if (/ai|rag|ml|agent|llm/.test(g)) return '/skills/ai/applied-ml.txt';
   return '/skills/devops/chaos.engineering';
 }
-function synth(goal) {
-  return `Based on the skill tree and the projects database, the evidence above directly supports the goal — ` +
-    `Euvel's record shows concrete, operated systems rather than asserted familiarity. Read the cited files for the full surface.`;
+
+// an honest summary of what the tool calls actually returned — no canned verdict
+const EMPTY = /^(no matches|\(0 rows\)|cannot read|D1 unavailable|sql error|empty pattern|unknown action)/;
+export function synth(goal, kw, trace) {
+  const found = trace.filter(t => !EMPTY.test(t.display));
+  const lead = 'No language model is reachable right now, so this is the deterministic planner.';
+  if (!kw) return `${lead} It could not tell what to look up. Try \`help\`, \`ls /skills\`, or ask again in a moment.`;
+  if (!found.length) return `${lead} Nothing in the skill tree or the projects database matched "${kw}". Try \`ls /skills\` or \`sql "select * from projects"\`.`;
+  return `${lead} For "${kw}" it found: ` + found.map(t => `${t.action} → ${t.display}`).join('; ') + '.';
 }
 
 /* ── parsing + formatting ────────────────────────────────────────── */
